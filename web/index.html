@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Smart Contract Inventory & Control Registry demo">
+  <title>Smart Contract Registry — On-chain Control</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a1a1a'/%3E%3Crect x='9' y='9' width='14' height='14' fill='%23e60000' transform='rotate(45 16 16)'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <nav class="topbar" aria-label="Primary">
+    <a class="brand" href="#overview" aria-label="Financial Institution Smart Contract Registry">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-text">
+        <span class="brand-name">ONCHAIN</span>
+        <span class="brand-sub">Smart Contract Registry</span>
+      </span>
+    </a>
+    <div class="nav-links" role="tablist" aria-label="Views">
+      <button class="nav-link active" data-view="overview" role="tab" aria-selected="true">Overview</button>
+      <button class="nav-link" data-view="inventory" role="tab" aria-selected="false">Inventory</button>
+      <button class="nav-link" data-view="templates" role="tab" aria-selected="false">Templates</button>
+      <button class="nav-link" data-view="approvals" role="tab" aria-selected="false">Approvals <span id="nav-approval-count"></span></button>
+      <button class="nav-link" data-view="council" role="tab" aria-selected="false">Council</button>
+      <button class="nav-link" data-view="reconciliation" role="tab" aria-selected="false">Reconciliation</button>
+      <button class="nav-link" data-view="controls" role="tab" aria-selected="false">Controls</button>
+    </div>
+    <div class="topbar-right">
+      <span class="env-tag"><span class="env-dot"></span> Besu prod · Ethereum</span>
+      <div class="user-chip">
+        <div class="avatar" aria-hidden="true"><span>PN</span></div>
+        <span>Priya Nair<br><span style="color:#9a9a9a;font-size:9px">Digital Assets</span></span>
+      </div>
+    </div>
+  </nav>
+
+  <main class="shell">
+    <header class="page-head">
+      <div>
+        <div class="eyebrow">Software inventory · Digital assets</div>
+        <h1>Contract Registry</h1>
+        <p class="page-sub">A system of record for approved contract templates, every on-chain deployment, the evidence behind them, and the business sign-offs that authorise production.</p>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-outline" id="export-btn">Export register</button>
+        <button class="btn btn-primary" id="sync-btn">Run Besu sync</button>
+      </div>
+    </header>
+
+    <!-- OVERVIEW -->
+    <section id="view-overview" class="view active" role="tabpanel" aria-label="Overview">
+      <div class="kpi-grid" id="kpi-grid"></div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Estate at a glance</div>
+            <button class="card-link" data-nav="inventory">View inventory →</button>
+          </div>
+          <div class="card-body">
+            <div class="donut-wrap">
+              <div class="donut" id="risk-donut"><div class="donut-center"><strong id="risk-total">—</strong><span>contracts</span></div></div>
+              <div class="legend" id="risk-legend"></div>
+            </div>
+            <div class="detail-section">
+              <h4>Template categories</h4>
+              <div id="category-bars"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Tokenized gold reserve</div>
+            <button class="card-link" data-nav="controls">Controls →</button>
+          </div>
+          <div class="card-body" id="reserve-card"></div>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Approval queue</div>
+            <button class="card-link" data-nav="approvals">Open approvals →</button>
+          </div>
+          <div class="card-body tight" id="approval-preview"></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Attention required</div>
+            <button class="card-link" data-nav="reconciliation">Reconcile →</button>
+          </div>
+          <div class="card-body tight" id="alert-preview"></div>
+        </div>
+      </div>
+
+      <div class="card section-gap">
+        <div class="card-head">
+          <div class="card-title">Recent deployments</div>
+          <span class="small muted">Last synced <span id="last-sync">—</span></span>
+        </div>
+        <div class="card-body tight" id="recent-table"></div>
+      </div>
+
+      <div class="footer">
+        <span><strong>Demo data.</strong> Fictional bank, contracts, people and addresses. Not legal or investment advice.</span>
+        <span>Registry v0.1 · SQLite · <span id="generated-at">—</span></span>
+      </div>
+    </section>
+
+    <!-- INVENTORY -->
+    <section id="view-inventory" class="view" role="tabpanel" aria-label="Inventory">
+      <div class="view-intro">
+        <div>
+          <h2>Contract inventory</h2>
+          <p>One row per logical deployment. Implementations and shared infrastructure are linked as dependencies, not counted as products.</p>
+        </div>
+        <span class="result-count" id="inventory-count">—</span>
+      </div>
+      <div class="filter-bar">
+        <div class="search"><input id="inventory-search" type="search" placeholder="Search product, template, address or owner" aria-label="Search inventory"></div>
+        <select class="filter" id="inventory-risk" aria-label="Filter by risk">
+          <option value="">All risk tiers</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+        </select>
+        <select class="filter" id="inventory-chain" aria-label="Filter by chain"><option value="">All chains</option></select>
+        <select class="filter" id="inventory-status" aria-label="Filter by status">
+          <option value="">All statuses</option><option value="active">Active</option><option value="paused">Paused</option><option value="retired">Retired</option><option value="deprecated">Deprecated</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="table-wrap" id="inventory-table"></div>
+      </div>
+    </section>
+
+    <!-- TEMPLATES -->
+    <section id="view-templates" class="view" role="tabpanel" aria-label="Templates">
+      <div class="view-intro">
+        <div>
+          <h2>Template catalogue</h2>
+          <p>Approved code artifacts, their standards, audit state and every deployment that reuses them. A template is not a deployment.</p>
+        </div>
+        <span class="result-count" id="template-count">—</span>
+      </div>
+      <div class="filter-bar">
+        <div class="search"><input id="template-search" type="search" placeholder="Search template, version or standard" aria-label="Search templates"></div>
+        <select class="filter" id="template-category" aria-label="Filter by category"><option value="">All categories</option></select>
+        <select class="filter" id="template-status" aria-label="Filter by template status">
+          <option value="">All statuses</option><option value="approved">Approved</option><option value="draft">Draft</option><option value="deprecated">Deprecated</option>
+        </select>
+      </div>
+      <div class="template-grid" id="template-grid"></div>
+      <div class="card section-gap">
+        <div class="card-head"><div class="card-title">Template controls coverage</div><span class="small muted">Templates with audit state and live deployments</span></div>
+        <div class="card-body tight" id="template-table"></div>
+      </div>
+    </section>
+
+    <!-- APPROVALS -->
+    <section id="view-approvals" class="view" role="tabpanel" aria-label="Approvals">
+      <div class="view-intro">
+        <div>
+          <h2>Business sign-offs</h2>
+          <p>No production deployment without the required gates. Approvals are role-based, ordered, evidence-linked and checked for segregation of duties.</p>
+        </div>
+        <span class="result-count" id="approval-count">—</span>
+      </div>
+      <div class="kpi-grid" id="approval-kpis"></div>
+      <div class="detail-section">
+        <h4>Deployment requests</h4>
+        <div class="approval-list" id="deployment-approvals"></div>
+      </div>
+      <div class="grid grid-2-equal section-gap">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Template approvals</div></div>
+          <div class="card-body" id="template-approvals"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Change requests</div></div>
+          <div class="card-body" id="change-approvals"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COUNCIL -->
+    <section id="view-council" class="view" role="tabpanel" aria-label="Council">
+      <div class="view-intro">
+        <div>
+          <h2>Compliance & control council</h2>
+          <p>A pstack-style review by the roles that actually have to sign this off: business, compliance, legal, operational risk, security, DPO, finance and regulator. Each finding has an owner, severity and evidence ask.</p>
+        </div>
+        <span class="result-count" id="council-count">—</span>
+      </div>
+      <div class="kpi-grid" id="council-kpis"></div>
+      <div class="grid">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Persona council</div><span class="small muted">Independent challenge</span></div>
+          <div class="card-body" id="persona-cards"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Compliance coverage</div><span class="small muted">Product-level profile</span></div>
+          <div class="card-body tight" id="compliance-table"></div>
+        </div>
+      </div>
+      <div class="card section-gap">
+        <div class="card-head"><div class="card-title">Findings & actions</div><span class="small muted">Open, accepted and remediated</span></div>
+        <div class="card-body tight" id="findings-table"></div>
+      </div>
+      <div class="grid grid-2 section-gap">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Approval evidence gaps</div><span class="small muted">What audit cannot rely on</span></div>
+          <div class="card-body tight" id="evidence-gaps-table"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">ICT third parties</div><span class="small muted">DORA dependency view</span></div>
+          <div class="card-body tight" id="ict-table"></div>
+        </div>
+      </div>
+      <div class="card section-gap">
+        <div class="card-head"><div class="card-title">Reserve reconciliation & deployer risk</div><span class="small muted">Finance and CISO view</span></div>
+        <div class="card-body" id="council-recon"></div>
+      </div>
+    </section>
+
+    <!-- RECONCILIATION -->
+    <section id="view-reconciliation" class="view" role="tabpanel" aria-label="Reconciliation">
+      <div class="view-intro">
+        <div>
+          <h2>On-chain reconciliation</h2>
+          <p>Besu JSON-RPC discovery feeds the registry. The chain is evidence, not the system of record. Unknown contracts never get silently ignored.</p>
+        </div>
+        <span class="result-count" id="discovery-count">—</span>
+      </div>
+      <div class="chain-grid" id="chain-cards"></div>
+      <div class="grid grid-2 section-gap">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Unknown / unlinked contracts</div><span class="small muted">Triage queue</span></div>
+          <div class="card-body tight" id="discovery-table"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Besu ingestion flow</div></div>
+          <div class="card-body" id="sync-flow"></div>
+        </div>
+      </div>
+      <div class="card section-gap">
+        <div class="card-head"><div class="card-title">Sync runs</div><span class="small muted">Idempotent, checkpointed, finality-aware</span></div>
+        <div class="card-body tight" id="sync-runs"></div>
+      </div>
+    </section>
+
+    <!-- CONTROLS -->
+    <section id="view-controls" class="view" role="tabpanel" aria-label="Controls">
+      <div class="view-intro">
+        <div>
+          <h2>Controls & evidence</h2>
+          <p>Runtime controls mapped to DORA, SOX and the internal smart-contract framework. Exceptions are explicit, owned and traceable.</p>
+        </div>
+        <span class="result-count" id="control-count">—</span>
+      </div>
+      <div class="kpi-grid" id="control-kpis"></div>
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Control coverage</div><span class="small muted">All logical contracts</span></div>
+          <div class="card-body" id="control-coverage"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Expiring evidence</div><span class="small muted">Next 60 days</span></div>
+          <div class="card-body tight" id="attestation-table"></div>
+        </div>
+      </div>
+      <div class="grid grid-2 section-gap">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Control exceptions</div><span class="small muted">Accepted or remediating</span></div>
+          <div class="card-body tight" id="control-exceptions"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Open incidents</div></div>
+          <div class="card-body tight" id="incident-table"></div>
+        </div>
+      </div>
+      <div class="card section-gap">
+        <div class="card-head"><div class="card-title">Reserve & deployment readiness</div><span class="small muted">Token supply vs attested gold</span></div>
+        <div class="card-body tight" id="reserve-table"></div>
+      </div>
+      <div class="card section-gap">
+        <div class="card-head"><div class="card-title">Deployment readiness</div><span class="small muted">Policy-computed</span></div>
+        <div class="card-body tight" id="readiness-table"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal" id="modal">
+      <div id="modal-content"></div>
+    </div>
+  </div>
+  <div class="toast-wrap" id="toast-wrap" aria-live="polite"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
