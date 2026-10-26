@@ -2,7 +2,7 @@
 
 A working SQLite prototype of a bank-grade registry for **smart contract templates, on-chain deployments, business sign-offs, evidence and reconciliation**.
 
-**Public gist:** https://gist.github.com/lopezpalacios/180d4a4a401313fac33f222b4f1d7c28
+**Public gist:** https://gist.github.com/lopezpalacios/90e21f50bfbe94962eb4284c3f5cae88
 
 The demo is built around a fictional financial institution and a tokenized-gold estate: CMTAT 3.0.0 on a permissioned Besu ledger and on Ethereum mainnet, CMTA RuleEngine rules, ERC-3643 identity registries, a DvP settlement contract, a CHF deposit token, an escrow, a collateral-vault template, Safes, timelocks, oracles and proof-of-reserve. A **pstack-style Council** view records what Compliance, Legal, Operational Risk, Security, DPO, Finance and the business owner still do not accept.
 
