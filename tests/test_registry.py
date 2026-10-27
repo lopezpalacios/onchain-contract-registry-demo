@@ -533,3 +533,15 @@ class ApiActionsTestCase(unittest.TestCase):
         )
         self.assertEqual(status, 409)
         self.assertIn("four-eyes", body["error"].lower())
+
+    def test_registration_links_prechain_request_to_instance(self):
+        from app import registrations  # noqa: PLC0415
+        data = registrations(self.conn)
+        by_id = {item["id"]: item for item in data["items"]}
+        self.assertEqual(by_id["DR-2026-0031"]["instance_id"], "ci-ubgx-eth")
+        self.assertEqual(by_id["DR-2026-0031"]["link_state"], "linked_match")
+        self.assertEqual(by_id["DR-2026-0042"]["instance_id"], "ci-ubgx-besu")
+        self.assertEqual(by_id["DR-2026-0051"]["instance_id"], None)
+        self.assertEqual(by_id["DR-2026-0051"]["link_state"], "pre_chain")
+        self.assertEqual(data["summary"]["pre_chain"], 3)
+        self.assertEqual(data["summary"]["linked"], 4)

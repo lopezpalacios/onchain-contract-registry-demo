@@ -10,6 +10,8 @@
     discovery: { queue: [], runs: [], chains: [], counts: {} },
     controls: { coverage: [], exceptions: [], attestations: [], incidents: [], reserve: [], readiness: [], chains: [] },
     council: { personas: [], findings: [], compliance: [], ict: [], evidence_gaps: [], template_gaps: [], deployer_risk: [], reserve: [], summary: {} },
+    registration: { items: [], summary: {} },
+    selectedRegistration: "DR-2026-0031",
     approvalIndex: {},
     view: "overview",
     loading: true,
@@ -108,7 +110,7 @@
 
   function table(headers, rows, options = {}) {
     if (!rows.length) return `<div class="empty">${esc(options.empty || "No records.")}</div>`;
-    return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr class="${options.clickable ? "clickable" : ""}" ${row.id ? `data-contract="${esc(row.id)}"` : ""}>${row.cells.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+    return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr class="${options.clickable ? "clickable" : ""}" ${row.id ? `data-contract="${esc(row.id)}"` : row.registration ? `data-registration="${esc(row.registration)}"` : ""}>${row.cells.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
   }
 
   function detailGrid(items, extraClass = "") {
@@ -377,6 +379,126 @@
     renderApprovalPreview();
     renderAlerts();
     renderRecent();
+  }
+
+  // -----------------------------------------------------------------------
+  // Registration: pre-chain record -> on-chain instance
+  // -----------------------------------------------------------------------
+
+  function linkBadge(state) {
+    if (state === "linked_match") return badge("hash match", "low");
+    if (state === "linked_mismatch") return badge("hash mismatch", "critical");
+    return badge("pre-chain", "neutral");
+  }
+
+  function renderRegistration() {
+    const data = state.registration || { items: [], summary: {} };
+    const items = data.items || [];
+    if (!items.length) {
+      $("#registration-count").textContent = "No registrations";
+      $("#registration-kpis").innerHTML = "";
+      $("#registration-receipt").innerHTML = `<div class="empty">No deployment requests.</div>`;
+      $("#registration-lifecycle").innerHTML = `<div class="empty">No lifecycle.</div>`;
+      $("#registration-table").innerHTML = `<div class="empty">No records.</div>`;
+      return;
+    }
+    if (!items.some((i) => i.id === state.selectedRegistration)) {
+      state.selectedRegistration = (items.find((i) => i.id === "DR-2026-0031") || items[0]).id;
+    }
+    const selected = items.find((i) => i.id === state.selectedRegistration) || items[0];
+    const s = data.summary || {};
+    $("#registration-count").textContent = `${s.total || items.length} registrations · ${s.pre_chain || 0} pre-chain · ${s.linked || 0} linked`;
+    $("#registration-selected-id").textContent = selected.id;
+
+    $("#registration-kpis").innerHTML = [
+      ["Registration records", s.total || items.length, "Pre-chain + deployed"],
+      ["Pre-chain only", s.pre_chain || 0, "No on-chain address yet"],
+      ["Linked to chain", s.linked || 0, "Address + tx + block"],
+      ["Hash matches", s.hash_matches || 0, "Template = runtime code", "low"],
+      ["Hash mismatches", s.hash_mismatches || 0, "Investigate immediately", s.hash_mismatches ? "alert" : ""],
+      ["In review / blocked", `${s.in_review || 0} / ${s.blocked || 0}`, "Approvals / readiness"],
+    ].map(([label, value, sub, cls]) => `<div class="kpi ${cls || ""}"><div class="kpi-label">${esc(label)}</div><div class="kpi-value">${value}</div><div class="kpi-sub">${esc(sub)}</div></div>`).join("");
+
+    const manifest = selected.manifest_document || {};
+    const linked = Boolean(selected.instance_id);
+    const hashMatch = selected.link_state === "linked_match";
+    $("#registration-receipt").innerHTML = `
+      <div class="flex gap-8 center" style="flex-wrap:wrap;margin-bottom:14px">
+        ${statusBadge(selected.status)}
+        ${linkBadge(selected.link_state)}
+        ${riskBadge(selected.risk_tier)}
+        ${selected.readiness ? `<span class="badge ${selected.readiness.startsWith("Blocked") ? "badge-critical" : "badge-neutral"}">${esc(selected.readiness)}</span>` : ""}
+      </div>
+      ${detailGrid([
+        ["Product", esc(selected.product_name)],
+        ["Template", `${esc(selected.template_name)} <span class="mono">v${esc(selected.template_version)}</span>`],
+        ["Chain / environment", `${esc(selected.chain_name)} · ${esc(selected.environment)}`],
+        ["Legal entity", esc(selected.legal_entity)],
+        ["Jurisdiction", esc(selected.jurisdiction)],
+        ["Business owner", esc(selected.business_owner_name)],
+        ["Requested by", esc(selected.requested_by_name)],
+        ["Org unit", esc(selected.org_unit)],
+        ["Created", fmtDateTime(selected.created_at)],
+        ["Target window", esc(selected.target_window || "—")],
+        ["Change ticket", esc(selected.change_ticket || "—")],
+        ["Config hash", `<span class="mono">${esc(shortHash(selected.config_hash))}</span>`],
+        ["Manifest hash", `<span class="mono">${esc(shortHash(selected.manifest_hash))}</span>`],
+        ["Salt", `<span class="mono">${esc(shortHash(selected.salt))}</span>`],
+        ["Template runtime hash", `<span class="mono">${esc(shortHash(selected.template_runtime_hash))}</span>`],
+        ["On-chain runtime hash", selected.instance_runtime_hash ? `<span class="mono">${esc(shortHash(selected.instance_runtime_hash))}</span>` : "—"],
+      ])}
+      <div class="detail-section">
+        <h4>Approval progress</h4>
+        <div class="flex between center gap-12"><span class="small">${selected.approved_gates || 0} of ${selected.total_gates || 0} gates approved</span>${selected.pending_gates ? badge(`${selected.pending_gates} pending`, "high") : badge("complete", "low")}</div>
+        ${progress(selected.approved_gates || 0, selected.total_gates || 0)}
+      </div>
+      ${linked ? `
+        <div class="detail-section"><h4>On-chain link</h4>
+          <div class="address-box">${esc(selected.address_eip55 || selected.address)}<button class="copy-btn" data-copy="${esc(selected.address)}">Copy</button></div>
+          ${detailGrid([
+            ["Instance", `<button class="card-link" data-contract="${esc(selected.instance_id)}">${esc(selected.instance_id)} →</button>`],
+            ["Status", statusBadge(selected.instance_status)],
+            ["Deployment tx", `<span class="mono">${esc(shortHash(selected.deployment_tx))}</span>`],
+            ["Block", fmtNum(selected.block_number)],
+            ["Deployed", fmtDateTime(selected.deployed_at)],
+            ["Proxy", esc(selected.proxy_type || "none")],
+            ["Verification", `${esc(selected.verification_provider || "—")} ${badge(selected.verification_status, selected.verification_status === "exact" ? "low" : "high")}`],
+            ["Linked records", `${selected.linked_records || 1} total · ${selected.implementation_count || 0} impl · ${selected.supporting_count || 0} supporting`],
+          ])}
+          <div class="form-note">Same <strong>${esc(selected.id)}</strong> record now resolves to <span class="mono">${esc(shortAddr(selected.address))}</span>. The template and runtime hashes are ${hashMatch ? "identical" : "different — investigate"}.</div>
+        </div>` : `
+        <div class="alert-item" style="margin-top:16px">
+          <span class="alert-mark amber"></span>
+          <div class="alert-main"><div class="alert-title">Pre-chain registration — no on-chain address yet</div><div class="alert-sub">The record exists as a deployment request. After the deployment transaction is signed and mined, the worker links the address, transaction, block and runtime code hash back to this same request ID.</div></div>
+        </div>
+        <div class="detail-section"><h4>Manifest</h4>
+          ${manifest.title ? `<div class="link-item"><span class="link-relation">manifest</span><span>${esc(manifest.title)}</span><span class="mono tiny">${esc(shortHash(manifest.sha256))}</span></div>` : `<div class="empty">No manifest document attached yet.</div>`}
+        </div>`}
+    `;
+
+    const step = (num, label, done, title, sub) => `<div class="timeline-item ${done ? "done" : "pending"}"><div class="timeline-date">${num} · ${esc(label)}</div><div class="timeline-title">${esc(title)}</div><div class="timeline-sub">${esc(sub)}</div></div>`;
+    $("#registration-lifecycle").innerHTML = `<div class="timeline">
+      ${step("01", "TEMPLATE", selected.template_status === "approved", `${selected.template_name} v${selected.template_version}`, `${selected.template_status} · audit ${selected.audit_status || "—"}`)}
+      ${step("02", "PRE-CHAIN", true, "Deployment request registered", `${fmtDate(selected.created_at)} · ${selected.id}`)}
+      ${step("03", "SIGN-OFFS", (selected.pending_gates || 0) === 0 && (selected.total_gates || 0) > 0, "Business and control gates", `${selected.approved_gates || 0}/${selected.total_gates || 0} approved`)}
+      ${step("04", "MANIFEST", Boolean(selected.manifest_hash), "Deployment manifest hash", selected.manifest_hash ? `${shortHash(selected.manifest_hash)} · ${manifest.title ? "document attached" : "document not attached"}` : "not attached")}
+      ${step("05", "DEPLOYMENT", Boolean(selected.deployment_tx), "Transaction signed and mined", selected.deployment_tx ? shortHash(selected.deployment_tx) : "waiting for deployment")}
+      ${step("06", "ON-CHAIN", Boolean(selected.instance_id), "Contract instance registered", selected.instance_id ? `${shortAddr(selected.address)} · block ${fmtNum(selected.block_number)}` : "no address yet")}
+    </div>`;
+
+    const rows = items.map((item) => ({
+      registration: item.id,
+      cells: [
+        `<div class="row-title">${esc(item.id)}</div><div class="row-sub">${esc(item.product_name)}</div>`,
+        `<div class="small">${esc(item.template_name)}</div><div class="row-sub">v${esc(item.template_version)}</div>`,
+        chainPill(item.chain_name, item.environment),
+        statusBadge(item.status),
+        `<span class="small">${item.approved_gates || 0}/${item.total_gates || 0}</span>`,
+        item.instance_id ? `<span class="mono">${esc(shortAddr(item.address_eip55 || item.address))}</span><div class="row-sub">block ${fmtNum(item.block_number)}</div>` : `<span class="badge badge-neutral">no address yet</span>`,
+        linkBadge(item.link_state),
+      ],
+    }));
+    $("#registration-table").innerHTML = table(["Registration", "Template", "Chain", "Status", "Gates", "On-chain contract", "Link"], rows, { clickable: true, empty: "No registrations." });
   }
 
   // -----------------------------------------------------------------------
@@ -1179,7 +1301,7 @@
   // -----------------------------------------------------------------------
 
   async function loadAll() {
-    const [summary, inventory, templates, approvals, discovery, controls, council] = await Promise.all([
+    const [summary, inventory, templates, approvals, discovery, controls, council, registration] = await Promise.all([
       api("/api/summary"),
       api("/api/contracts"),
       api("/api/templates"),
@@ -1187,6 +1309,7 @@
       api("/api/discovery"),
       api("/api/controls"),
       api("/api/council"),
+      api("/api/registrations"),
     ]);
     state.summary = summary;
     state.inventory = inventory.items || [];
@@ -1196,6 +1319,7 @@
     state.discovery = discovery;
     state.controls = controls;
     state.council = council;
+    state.registration = registration;
     state.loading = false;
     populateInventoryChains();
     populateTemplateCategories();
@@ -1210,6 +1334,7 @@
   function renderAll() {
     if (!state.summary) return;
     renderOverview();
+    renderRegistration();
     renderInventory();
     renderTemplates();
     renderApprovals();
@@ -1250,6 +1375,7 @@
       discovery: state.discovery,
       controls: state.controls,
       council: state.council,
+      registration: state.registration,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1269,6 +1395,14 @@
     const nav = event.target.closest("[data-view], [data-nav]");
     if (nav) {
       switchView(nav.dataset.view || nav.dataset.nav);
+      return;
+    }
+    const registration = event.target.closest("[data-registration]");
+    if (registration) {
+      event.preventDefault();
+      state.selectedRegistration = registration.dataset.registration;
+      renderRegistration();
+      switchView("registration", false);
       return;
     }
     const contract = event.target.closest("[data-contract]");

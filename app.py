@@ -628,6 +628,108 @@ def council(conn) -> dict:
     }
 
 
+def registrations(conn) -> dict:
+    items = rows(
+        conn,
+        """
+        SELECT
+            dr.id, dr.template_id, dr.chain_id, dr.environment, dr.product_name,
+            dr.legal_entity, dr.jurisdiction, dr.risk_tier, dr.config_hash,
+            dr.manifest_hash, dr.init_params_json, dr.salt, dr.status,
+            dr.change_ticket, dr.target_window, dr.created_at, dr.approved_at, dr.notes,
+            t.name AS template_name, t.version AS template_version,
+            t.status AS template_status, t.runtime_code_hash AS template_runtime_hash,
+            t.initcode_hash AS template_initcode_hash, t.audit_status, t.audit_valid_until,
+            ch.name AS chain_name, ch.network_type, ch.environment AS chain_environment,
+            req.display_name AS requested_by_name,
+            owner.display_name AS business_owner_name,
+            ou.name AS org_unit,
+            r.readiness,
+            (SELECT COUNT(*) FROM signoff s
+              WHERE s.object_type='deployment' AND s.object_id=dr.id) AS total_gates,
+            (SELECT COUNT(*) FROM signoff s
+              WHERE s.object_type='deployment' AND s.object_id=dr.id AND s.decision='approved') AS approved_gates,
+            (SELECT COUNT(*) FROM signoff s
+              WHERE s.object_type='deployment' AND s.object_id=dr.id AND s.decision='pending') AS pending_gates,
+            (SELECT COUNT(*) FROM contract_instance x
+              WHERE x.deployment_request_id=dr.id) AS linked_records,
+            (SELECT COUNT(*) FROM contract_instance x
+              WHERE x.deployment_request_id=dr.id AND x.instance_kind='implementation') AS implementation_count,
+            (SELECT COUNT(*) FROM contract_instance x
+              WHERE x.deployment_request_id=dr.id AND x.instance_kind='supporting') AS supporting_count
+        FROM deployment_request dr
+        JOIN template t ON t.id = dr.template_id
+        JOIN chain ch ON ch.id = dr.chain_id
+        JOIN person req ON req.id = dr.requested_by
+        JOIN person owner ON owner.id = dr.business_owner_id
+        JOIN org_unit ou ON ou.id = dr.org_unit_id
+        LEFT JOIN v_deployment_readiness r ON r.id = dr.id
+        ORDER BY CASE dr.status
+            WHEN 'in_review' THEN 1 WHEN 'approved' THEN 2
+            WHEN 'deployed' THEN 3 ELSE 4 END, dr.created_at DESC
+        """,
+    )
+    for item in items:
+        instance = one(
+            conn,
+            """
+            SELECT ci.*, ch.name AS chain_name
+            FROM contract_instance ci
+            JOIN chain ch ON ch.id = ci.chain_id
+            WHERE ci.deployment_request_id = ? AND ci.instance_kind = 'logical'
+            ORDER BY (ci.product_name = ?) DESC, ci.deployed_at DESC, ci.id
+            LIMIT 1
+            """,
+            (item["id"], item["product_name"]),
+        )
+        item["instance_id"] = instance.get("id")
+        item["address"] = instance.get("address")
+        item["instance_address"] = instance.get("address")
+        item["address_eip55"] = instance.get("address_eip55")
+        item["deployment_tx"] = instance.get("deployment_tx")
+        item["block_number"] = instance.get("block_number")
+        item["deployed_at"] = instance.get("deployed_at")
+        item["instance_runtime_hash"] = instance.get("runtime_code_hash")
+        item["instance_initcode_hash"] = instance.get("init_code_hash")
+        item["proxy_type"] = instance.get("proxy_type")
+        item["implementation_address"] = instance.get("implementation_address")
+        item["verification_status"] = instance.get("verification_status")
+        item["verification_provider"] = instance.get("verification_provider")
+        item["instance_status"] = instance.get("status")
+        if not item.get("instance_id"):
+            item["link_state"] = "pre_chain"
+        elif (
+            item.get("instance_runtime_hash")
+            and item.get("template_runtime_hash")
+            and item["instance_runtime_hash"].lower() == item["template_runtime_hash"].lower()
+        ):
+            item["link_state"] = "linked_match"
+        else:
+            item["link_state"] = "linked_mismatch"
+        item["gates"] = rows(
+            conn,
+            "SELECT * FROM v_gate_status WHERE object_type='deployment' AND object_id=? ORDER BY sequence",
+            (item["id"],),
+        )
+        item["manifest_document"] = one(
+            conn,
+            "SELECT * FROM document WHERE object_type='deployment_request' AND object_id=? AND doc_type='deployment_manifest' ORDER BY created_at DESC LIMIT 1",
+            (item["id"],),
+        )
+    return {
+        "items": items,
+        "summary": {
+            "total": len(items),
+            "pre_chain": sum(1 for i in items if i["link_state"] == "pre_chain"),
+            "linked": sum(1 for i in items if i["link_state"].startswith("linked")),
+            "hash_matches": sum(1 for i in items if i["link_state"] == "linked_match"),
+            "hash_mismatches": sum(1 for i in items if i["link_state"] == "linked_mismatch"),
+            "in_review": sum(1 for i in items if i["status"] == "in_review"),
+            "blocked": sum(1 for i in items if (i.get("readiness") or "").startswith("Blocked")),
+        },
+    }
+
+
 def template_meta(conn) -> dict:
     return {
         "categories": rows(conn, "SELECT category, COUNT(*) AS count FROM template GROUP BY category ORDER BY count DESC"),
@@ -866,6 +968,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_json(200, detail) if detail else self._send_json(404, {"error": "not found"})
             if route == "/api/approvals":
                 return self._send_json(200, approvals(conn))
+            if route == "/api/registrations":
+                return self._send_json(200, registrations(conn))
             if route == "/api/discovery":
                 return self._send_json(200, discovery(conn))
             if route == "/api/controls":

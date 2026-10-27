@@ -34,6 +34,7 @@ The current build has **26 templates**, **25 contract records** (16 logical prod
 | View | What it demonstrates |
 |---|---|
 | **Overview** | Coverage, risk mix, reserve coverage, approval queue, expiring evidence and unknown-contract alerts. |
+| **Registration** | The pre-chain record — template, request, config/manifest hash and approvals — linked to the deployed address, transaction, block, proxy and runtime-code hash. |
 | **Inventory** | One row per logical deployment; proxy/implementation and supporting contracts are linked, not counted as products. |
 | **Templates** | Template catalogue with version, standards, audit state, reuse count and every deployment. |
 | **Approvals** | Risk-tiered gates, ordered approvals, role/scope checks, segregation of duties and readiness blocking. |
@@ -43,14 +44,15 @@ The current build has **26 templates**, **25 contract records** (16 logical prod
 
 Try these flows:
 
-1. Open **Inventory → UBGX Gold Token (Public)**. It is a UUPS proxy; the implementation is a separate on-chain record, and the admin is a 48-hour timelock controlled by a 3-of-5 Safe.
-2. Open **Templates → CMTAT Standard 3.0.0**. It has three logical deployments on two chains. Open **CMTAT Standard 3.2.0**; it is blocked because the independent audit is missing/expired.
-3. Open **Approvals → UBGX Pilot 3.2**. Business and Compliance approved, but the next gate is blocked by the template. The final CAB gate cannot be completed.
-4. Open **Approvals → UBGX Gold Token (Luxembourg)** and review **LEGAL** as Daniel Roth. The wrong actor is rejected; the eligible actor succeeds.
-5. Open **Reconciliation**. `disc-001`, `disc-002` and `disc-003` are unknown contracts. `disc-003` is a 94%-similar CMTAT clone on Ethereum mainnet, quarantined as critical.
-6. Click **Run Besu sync** to exercise the mock adapter; it writes a new unknown-contract discovery and a sync run.
-7. Open **Council**. Review the 20 findings from Compliance, Legal, Operational Risk, Security, DPO, Finance, Business and Regulator. Open a finding/contract to see the compliance profile and signer identity.
-8. Open **Controls**. SC-05 is an exception because the country-restriction rule admin is an EOA; SC-04 is an exception because the DvP contract was backfilled without complete CAB evidence. Both are owned and approved.
+1. Open **Registration → DR-2026-0031**. The pre-chain request is linked to the deployed public token at `0x919d…94c6`; the same record shows the deployment transaction, block, runtime hash and proxy/implementation links.
+2. Open **Inventory → UBGX Gold Token (Public)**. It is a UUPS proxy; the implementation is a separate on-chain record, and the admin is a 48-hour timelock controlled by a 3-of-5 Safe.
+3. Open **Templates → CMTAT Standard 3.0.0**. It has three logical deployments on two chains. Open **CMTAT Standard 3.2.0**; it is blocked because the independent audit is missing/expired.
+4. Open **Approvals → UBGX Pilot 3.2**. Business and Compliance approved, but the next gate is blocked by the template. The final CAB gate cannot be completed.
+5. Open **Approvals → UBGX Gold Token (Luxembourg)** and review **LEGAL** as Daniel Roth. The wrong actor is rejected; the eligible actor succeeds.
+6. Open **Reconciliation**. `disc-001`, `disc-002` and `disc-003` are unknown contracts. `disc-003` is a 94%-similar CMTAT clone on Ethereum mainnet, quarantined as critical.
+7. Click **Run Besu sync** to exercise the mock adapter; it writes a new unknown-contract discovery and a sync run.
+8. Open **Council**. Review the 20 findings from Compliance, Legal, Operational Risk, Security, DPO, Finance, Business and Regulator. Open a finding/contract to see the compliance profile and signer identity.
+9. Open **Controls**. SC-05 is an exception because the country-restriction rule admin is an EOA; SC-04 is an exception because the DvP contract was backfilled without complete CAB evidence. Both are owned and approved.
 
 ---
 
@@ -198,7 +200,7 @@ The demo server has no authentication, TLS or CSRF protection. Bind it to `127.0
 
 ## Status
 
-- 28 automated tests pass.
+- 29 automated tests pass.
 - API and UI are smoke-tested with Playwright; no console errors.
 - The Besu adapter is tested in mock mode. A real node is not available in this environment; the JSON-RPC path is implemented but should be validated against the bank's Besu version and privacy configuration before use.
 - The Council view deliberately shows **141 approved gates with placeholder or missing evidence**, no IdP/MFA, and open legal/AML/DPIA/DORA findings. Do not present the demo as production-ready.

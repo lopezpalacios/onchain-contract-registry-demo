@@ -19,6 +19,7 @@
     </a>
     <div class="nav-links" role="tablist" aria-label="Views">
       <button class="nav-link active" data-view="overview" role="tab" aria-selected="true">Overview</button>
+      <button class="nav-link" data-view="registration" role="tab" aria-selected="false">Registration</button>
       <button class="nav-link" data-view="inventory" role="tab" aria-selected="false">Inventory</button>
       <button class="nav-link" data-view="templates" role="tab" aria-selected="false">Templates</button>
       <button class="nav-link" data-view="approvals" role="tab" aria-selected="false">Approvals <span id="nav-approval-count"></span></button>
@@ -106,6 +107,44 @@
       <div class="footer">
         <span><strong>Demo data.</strong> Fictional bank, contracts, people and addresses. Not legal or investment advice.</span>
         <span>Registry v0.1 · SQLite · <span id="generated-at">—</span></span>
+      </div>
+    </section>
+
+    <!-- REGISTRATION -->
+    <section id="view-registration" class="view" role="tabpanel" aria-label="Registration">
+      <div class="view-intro">
+        <div>
+          <h2>Registration &amp; deployment linkage</h2>
+          <p>Register the intent before deployment. The same pre-chain record later points to the deployed address, transaction, block and runtime code hash.</p>
+        </div>
+        <span class="result-count" id="registration-count">—</span>
+      </div>
+      <div class="kpi-grid" id="registration-kpis"></div>
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Registration record</div>
+            <span class="small muted" id="registration-selected-id">—</span>
+          </div>
+          <div class="card-body" id="registration-receipt"></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Pre-chain → on-chain lifecycle</div>
+            <span class="small muted">Same record, later linked</span>
+          </div>
+          <div class="card-body" id="registration-lifecycle"></div>
+        </div>
+      </div>
+      <div class="card section-gap">
+        <div class="card-head">
+          <div class="card-title">Registration ↔ deployed contract</div>
+          <span class="small muted">Select a registration to inspect the link</span>
+        </div>
+        <div class="card-body tight" id="registration-table"></div>
+      </div>
+      <div class="form-note" style="padding:12px 0 0">
+        A pre-chain record is a <strong>deployment request</strong> plus template, config hash, manifest hash and approvals. The on-chain record is only created after the deployment transaction. The link is the request ID, deployment transaction and bytecode hash match — not a spreadsheet note.
       </div>
     </section>
 

@@ -416,3 +416,9 @@ select.filter, input.filter {
   .reserve-pct { font-size: 42px; }
   .bar-row { grid-template-columns: 96px 1fr 36px; }
 }
+
+/* Registration lifecycle */
+.timeline-item.done::before { background: var(--green); }
+.timeline-item.pending::before { background: var(--line-strong); }
+.timeline-item.pending .timeline-title { color: var(--muted); }
+.timeline-item.pending .timeline-sub { color: var(--muted-2); }

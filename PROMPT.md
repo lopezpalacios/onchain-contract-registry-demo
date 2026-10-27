@@ -256,12 +256,13 @@ Design language: **financial institution** — deep black, white, warm grey, one
 Views:
 
 1. **Overview** — 6 KPIs, risk donut, template category bars, tokenized-gold reserve card, approval queue, attention list, recent deployments.
-2. **Inventory** — search + risk/chain/status filters, table with product, template/version, chain, owner/division, risk, audit state, verification, status.
-3. **Templates** — searchable card grid + table; show deployments, chains, audit, status, standards, category.
-4. **Approvals** — KPIs, deployment cards with gate rail, progress, readiness and review buttons; template and change approvals.
-5. **Council** — pstack-style persona cards, findings, compliance coverage, evidence gaps, ICT third parties, reserve reconciliation and deployer risk.
-6. **Reconciliation** — chain health, unknown-contract queue, sync runs, Besu ingestion flow explanation, inspect modal.
-7. **Controls** — control coverage bars, expiring evidence, exceptions, incidents, reserve table, deployment readiness.
+2. **Registration** — pre-chain record (template, request, config/manifest hash and approvals) linked to the deployed address, transaction, block, proxy/implementation and runtime-code hash; pre-chain vs linked rows must be distinct.
+3. **Inventory** — search + risk/chain/status filters, table with product, template/version, chain, owner/division, risk, audit state, verification, status.
+4. **Templates** — searchable card grid + table; show deployments, chains, audit, status, standards, category.
+5. **Approvals** — KPIs, deployment cards with gate rail, progress, readiness and review buttons; template and change approvals.
+6. **Council** — pstack-style persona cards, findings, compliance coverage, evidence gaps, ICT third parties, reserve reconciliation and deployer risk.
+7. **Reconciliation** — chain health, unknown-contract queue, sync runs, Besu ingestion flow explanation, inspect modal.
+8. **Controls** — control coverage bars, expiring evidence, exceptions, incidents, reserve table, deployment readiness.
 
 Detail modals:
 
@@ -299,7 +300,7 @@ Add `unittest` tests covering:
 - final template approval requires an independent audit;
 - mock sync is idempotent.
 
-Target: 28 passing tests, including reserve bar reconciliation, complete template gates, four-eyes, append-only audit log, persona/council data and deployer-risk visibility.
+Target: 29 passing tests, including reserve bar reconciliation, complete template gates, four-eyes, append-only audit log, persona/council data and deployer-risk visibility.
 
 ---
 
@@ -354,7 +355,7 @@ Add `docs/example-queries.sql` with 18 useful queries.
 - An eligible approver can approve a pending gate; the nav pending count decreases.
 - A wrong role is rejected.
 - A final approval cannot bypass a blocked template/audit.
-- `python3 -m unittest discover -s tests -v` passes 28 tests.
+- `python3 -m unittest discover -s tests -v` passes 29 tests.
 - `python3 scripts/besu_sync.py --mock --chain ch-besu-prod` writes a discovery and sync run.
 - `python3 scripts/business_case.py` prints three scenarios.
 - README clearly states: fictional data, local demo, no auth/TLS, no real Besu node tested, not legal advice, no bank affiliation.
@@ -399,7 +400,7 @@ onchain-contract-registry-demo/
 
 ## 14. One-shot condensed prompt
 
-> Build a runnable local smart-contract registry demo for a fictional financial institution. Use SQLite, Python stdlib and vanilla JS. Model templates, deployment requests, on-chain instances (logical/implementation/supporting; native/mirror/wrapped/receipt), proxy links, reserves, evidence, changes, incidents and discovery. Seed CMTAT 3.0 tokenized gold on Besu + Ethereum, a rule engine, identity registries, DvP, escrow, CHF deposit, Safe/Timelock, oracle, proof-of-reserve, factory, multicall, plus draft CCIP/ERC-4337/ZK templates. Implement risk-tiered sign-offs with role/scope, segregation of duties, four-eyes, gate order, evidence expiry and readiness blocking. Add a Besu JSON-RPC discovery worker with EIP-1967/1167 detection and an unknown-contract queue. Add a pstack-style Council of eight banking roles, compliance profiles, signing identities, ICT third parties, reserve reconciliation and explicit evidence gaps. Build a Swiss-style UI with overview, inventory, templates, approvals, council, reconciliation and controls, plus detail modals. Write 28 tests, research open-source registries, a gap analysis and an honest business case. No real bank data; local-only; no auth/TLS; no explorer rebuild.
+> Build a runnable local smart-contract registry demo for a fictional financial institution. Use SQLite, Python stdlib and vanilla JS. Model templates, deployment requests, on-chain instances (logical/implementation/supporting; native/mirror/wrapped/receipt), proxy links, reserves, evidence, changes, incidents and discovery. Seed CMTAT 3.0 tokenized gold on Besu + Ethereum, a rule engine, identity registries, DvP, escrow, CHF deposit, Safe/Timelock, oracle, proof-of-reserve, factory, multicall, plus draft CCIP/ERC-4337/ZK templates. Implement risk-tiered sign-offs with role/scope, segregation of duties, four-eyes, gate order, evidence expiry and readiness blocking. Add a Besu JSON-RPC discovery worker with EIP-1967/1167 detection and an unknown-contract queue. Add a pstack-style Council of eight banking roles, compliance profiles, signing identities, ICT third parties, reserve reconciliation and explicit evidence gaps. Build a Swiss-style UI with overview, registration, inventory, templates, approvals, council, reconciliation and controls, plus detail modals. Write 29 tests, research open-source registries, a gap analysis and an honest business case. No real bank data; local-only; no auth/TLS; no explorer rebuild.
 
 ---
 
