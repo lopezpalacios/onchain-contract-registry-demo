@@ -405,6 +405,10 @@ INSERT INTO deployment_request (id, template_id, chain_id, environment, requeste
 ('DR-2026-0060', 'tpl-cmtat-320', 'ch-eth-mainnet', 'PROD', 'p-priya', 'p-elena', 'org-gwm-com', 'UBGX Pilot 3.2', 'Financial Institution AG', 'CH', 'high', '0xe10ce7994af984a675134dc0da885d85ef1afcc5662cdec70c99ee2edd6a5fc3', '{"name":"UBGX Pilot 3.2","symbol":"UBGXP","decimals":4,"maxSupply":"10000000","ruleEngine":"0x7f0d1e772365a8ea8c4d292c9be57c9910dbab25","admin":"0xf26274801325d20a15a830ce48cdae4f79fd907f","termsURI":"ipfs://bafybeigoldterms32"}', '0x972c482a0d86076608c98029a53948e918837013d119f6bec7fd6acd8b275b28', '0x0bb663ca6284450d858391c070d958e53acfb5ba1aca3d3b0e73143d2163c04b', 'in_review', 'CHG-9131', '2026-11-24 09:00-10:00 UTC', '2026-10-02T11:25:00Z', NULL, 'Pilot request intentionally blocked until CMTAT 3.2.0 has an independent audit.'),
 ('DR-2026-0063', 'tpl-collateral-100', 'ch-besu-prod', 'PROD', 'p-priya', 'p-elena', 'org-gwm-com', 'Gold Collateral Vault', 'Financial Institution AG', 'CH', 'critical', '0x373cd0eda245bd91e6fc7becf746f00352dc7fb5a5dc745610cdfac3df568d96', '{"goldToken":"0x46009f357c42ca5895de915a469cbb56b760411e","paymentToken":"0xedf975de39cda7da80d85e1a2268315af7a48bb9","ltvBps":6000,"liquidationThresholdBps":7500}', '0x4ea47ac16dd35a12dabfed10953e7946f9b83bbc3f3f282350ce03244f859ea8', '0x78ad43ea8a2d763c28afe0a319397a02d2d4185352d285f4b6ed996f2173c82d', 'in_review', 'CHG-9158', '2026-12-01 08:00-11:00 UTC', '2026-10-23T16:45:00Z', NULL, 'Critical-risk collateral product; requires DPO and Model Risk sign-off.');
 
+UPDATE deployment_request SET signing_identity_id = 'si-eth-service' WHERE id IN ('DR-2026-0031', 'DR-2026-0060');
+UPDATE deployment_request SET signing_identity_id = 'si-besu-service' WHERE id IN ('DR-2026-0042', 'DR-2026-0051', 'DR-2026-0063');
+UPDATE deployment_request SET signing_identity_id = 'si-besu-uat-service' WHERE id IN ('DR-2026-0053', 'DR-2026-0055');
+
 -- Generate one evidence row per policy gate. This keeps policy and workflow in sync.
 INSERT INTO signoff (id, object_type, object_id, gate, required_role, decision, created_at)
 SELECT

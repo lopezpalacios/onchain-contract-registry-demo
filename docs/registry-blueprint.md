@@ -303,6 +303,10 @@ A registry approval is **business evidence**. It is not a transaction signature.
 
 This is the difference between “we have a workflow” and “the workflow controls the key.”
 
+### 7.5 FireFly under Kaleido
+
+FireFly is the contract manager/API and event-listener layer; Kaleido is the managed chain, permissioning and HSM/KMS signing layer. The registry remains the pre-chain control plane. A deployment should only be submitted after the registry returns `Ready` and a signed manifest; FireFly/EthConnect then submits through the Kaleido signing identity, and the sync worker links the receipt address, block and runtime hash back to the same request ID. The full sequence, field mapping, idempotency, failure handling and security controls are in `docs/firefly-kaleido-integration.md`.
+
 ---
 
 ## 8. Business sign-off model

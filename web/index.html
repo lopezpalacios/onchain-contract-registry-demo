@@ -20,6 +20,7 @@
     <div class="nav-links" role="tablist" aria-label="Views">
       <button class="nav-link active" data-view="overview" role="tab" aria-selected="true">Overview</button>
       <button class="nav-link" data-view="registration" role="tab" aria-selected="false">Registration</button>
+      <button class="nav-link" data-view="onboarding" role="tab" aria-selected="false">Onboarding</button>
       <button class="nav-link" data-view="inventory" role="tab" aria-selected="false">Inventory</button>
       <button class="nav-link" data-view="templates" role="tab" aria-selected="false">Templates</button>
       <button class="nav-link" data-view="approvals" role="tab" aria-selected="false">Approvals <span id="nav-approval-count"></span></button>
@@ -145,6 +146,80 @@
       </div>
       <div class="form-note" style="padding:12px 0 0">
         A pre-chain record is a <strong>deployment request</strong> plus template, config hash, manifest hash and approvals. The on-chain record is only created after the deployment transaction. The link is the request ID, deployment transaction and bytecode hash match — not a spreadsheet note.
+      </div>
+    </section>
+
+    <!-- ONBOARDING -->
+    <section id="view-onboarding" class="view" role="tabpanel" aria-label="Onboarding">
+      <div class="view-intro">
+        <div>
+          <h2>Register a contract</h2>
+          <p>Start with the business intent, not the address. The wizard creates a pre-chain registration, computes the risk tier and required gates, and records the evidence gaps before anything is deployed.</p>
+        </div>
+        <span class="result-count" id="onboarding-step-label">Step 1 of 4</span>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Onboarding wizard</div>
+            <span class="small muted" id="onboarding-progress-label">1 / 4</span>
+          </div>
+          <div class="card-body">
+            <div class="wizard-ruler"><span data-ruler="1" class="active">1 Intent</span><span data-ruler="2">2 Deployment</span><span data-ruler="3">3 Evidence</span><span data-ruler="4">4 Review</span></div>
+            <form id="onboarding-form" autocomplete="off">
+              <div class="wizard-step active" data-step="1">
+                <div class="wizard-heading">What are you registering?</div>
+                <div class="form-grid">
+                  <div class="form-row"><label for="ob-name">Contract / product name</label><input id="ob-name" type="text" placeholder="e.g. Gold collateral rule" required></div>
+                  <div class="form-row"><label for="ob-purpose">Purpose</label><select id="ob-purpose"><option value="tokenized_asset">Tokenized asset</option><option value="settlement">Settlement / value</option><option value="compliance">Compliance / rule engine</option><option value="utility">Utility / infrastructure</option></select></div>
+                  <div class="form-row"><label for="ob-source">Code source</label><select id="ob-source"><option value="new">New template from scratch</option><option value="approved_params">Approved template, new parameters</option><option value="modified">Approved template, modified code</option><option value="third_party">Third-party / OSS template</option></select></div>
+                  <div class="form-row" id="ob-template-row"><label for="ob-template">Approved template</label><select id="ob-template"></select></div>
+                  <div class="form-row"><label for="ob-division">Business division</label><select id="ob-division"></select></div>
+                  <div class="form-row"><label for="ob-owner">Business owner</label><select id="ob-owner"></select></div>
+                  <div class="form-row full"><label for="ob-source-ref">Source repo / commit (optional)</label><input id="ob-source-ref" type="text" placeholder="git URL, branch, commit"></div>
+                  <div class="form-row full"><label for="ob-notes">Notes</label><textarea id="ob-notes" placeholder="What is the business purpose, client journey or dependency?"></textarea></div>
+                </div>
+              </div>
+              <div class="wizard-step" data-step="2">
+                <div class="wizard-heading">Where and for whom?</div>
+                <div class="form-grid">
+                  <div class="form-row"><label for="ob-chain">Chain / environment</label><select id="ob-chain"></select></div>
+                  <div class="form-row"><label for="ob-impact">Who uses or holds it?</label><select id="ob-impact"><option value="internal">Internal only</option><option value="external">External clients / investors</option><option value="both">Both</option></select></div>
+                  <div class="form-row"><label for="ob-risk">Risk tier</label><select id="ob-risk"><option value="auto">Auto — recommend</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div>
+                  <div class="form-row"><label for="ob-authority">Deployment authority</label><select id="ob-authority"><option value="firefly_kaleido">FireFly under Kaleido</option><option value="safe_timelock">Safe / Timelock</option><option value="factory">Factory / CREATE2</option><option value="manual">Manual developer wallet</option></select></div>
+                  <div class="form-row full"><label for="ob-window">Target window (optional)</label><input id="ob-window" type="text" placeholder="e.g. 2026-11-10 09:00-11:00 UTC"></div>
+                </div>
+                <div class="alert-item" style="margin-top:12px"><span class="alert-mark green"></span><div class="alert-main"><div class="alert-title">FireFly under Kaleido</div><div class="alert-sub">FireFly submits the signed deployment through the Kaleido digital-asset platform. The registry records the pre-chain intent here and links the FireFly/Kaleido receipt, address, block and runtime hash after deployment.</div></div></div>
+              </div>
+              <div class="wizard-step" data-step="3">
+                <div class="wizard-heading">What evidence exists today?</div>
+                <div class="evidence-grid">
+                  <label class="check-row"><input type="checkbox" class="ob-evidence" value="source_tests" checked> <span><strong>Source + tests</strong><small>Repository, test suite, build instructions</small></span></label>
+                  <label class="check-row"><input type="checkbox" class="ob-evidence" value="audit"> <span><strong>Independent audit</strong><small>External audit with scope and findings</small></span></label>
+                  <label class="check-row"><input type="checkbox" class="ob-evidence" value="legal" checked> <span><strong>Legal opinion / terms</strong><small>Token/prospectus terms and enforceability</small></span></label>
+                  <label class="check-row"><input type="checkbox" class="ob-evidence" value="dpia" checked> <span><strong>DPIA / privacy review</strong><small>On-chain data and privacy-group assessment</small></span></label>
+                  <label class="check-row"><input type="checkbox" class="ob-evidence" value="dora" checked> <span><strong>DORA / third-party</strong><small>ICT provider, outsourcing and exit review</small></span></label>
+                  <label class="check-row"><input type="checkbox" class="ob-evidence" value="reserve"> <span><strong>Proof of reserve</strong><small>Custodian, auditor and reserve attestation</small></span></label>
+                </div>
+                <div class="form-note">The wizard does not pretend missing evidence exists. Missing items remain visible and block readiness; they are the agenda for the council.</div>
+              </div>
+              <div class="wizard-step" data-step="4">
+                <div class="wizard-heading">Review the pre-chain registration</div>
+                <div id="onboarding-review"></div>
+                <div class="form-note">Creating this record does not deploy anything. It creates a deployment request with pending gates and no on-chain address.</div>
+              </div>
+              <div class="wizard-actions">
+                <button type="button" class="btn btn-outline" id="ob-back">Back</button>
+                <button type="button" class="btn btn-primary" id="ob-next">Continue</button>
+                <button type="button" class="btn btn-primary" id="ob-create" style="display:none">Create pre-chain registration</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Guardrails preview</div><span class="small muted">Computed from the answers</span></div>
+          <div class="card-body" id="onboarding-preview"><div class="empty">Answer the first step to see the path, risk and gates.</div></div>
+        </div>
       </div>
     </section>
 

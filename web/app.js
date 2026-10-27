@@ -11,6 +11,8 @@
     controls: { coverage: [], exceptions: [], attestations: [], incidents: [], reserve: [], readiness: [], chains: [] },
     council: { personas: [], findings: [], compliance: [], ict: [], evidence_gaps: [], template_gaps: [], deployer_risk: [], reserve: [], summary: {} },
     registration: { items: [], summary: {} },
+    reference: { chains: [], org_units: [], people: [], templates: [], policies: [], evidence_labels: {} },
+    onboardingStep: 1,
     selectedRegistration: "DR-2026-0031",
     approvalIndex: {},
     view: "overview",
@@ -441,11 +443,15 @@
         ["Created", fmtDateTime(selected.created_at)],
         ["Target window", esc(selected.target_window || "—")],
         ["Change ticket", esc(selected.change_ticket || "—")],
+        ["Deployment platform", esc(selected.deployment_platform || "—")],
+        ["Signing identity", `${esc(selected.signing_identity || "—")} ${badge(selected.signing_identity_type || "key", "neutral")}`],
         ["Config hash", `<span class="mono">${esc(shortHash(selected.config_hash))}</span>`],
         ["Manifest hash", `<span class="mono">${esc(shortHash(selected.manifest_hash))}</span>`],
         ["Salt", `<span class="mono">${esc(shortHash(selected.salt))}</span>`],
         ["Template runtime hash", `<span class="mono">${esc(shortHash(selected.template_runtime_hash))}</span>`],
         ["On-chain runtime hash", selected.instance_runtime_hash ? `<span class="mono">${esc(shortHash(selected.instance_runtime_hash))}</span>` : "—"],
+        ["Template status", statusBadge(selected.template_status)],
+        ["Audit valid until", fmtDate(selected.audit_valid_until)],
       ])}
       <div class="detail-section">
         <h4>Approval progress</h4>
@@ -499,6 +505,165 @@
       ],
     }));
     $("#registration-table").innerHTML = table(["Registration", "Template", "Chain", "Status", "Gates", "On-chain contract", "Link"], rows, { clickable: true, empty: "No registrations." });
+  }
+
+  // -----------------------------------------------------------------------
+  // Onboarding wizard
+  // -----------------------------------------------------------------------
+
+  const PURPOSE_LABELS = {
+    tokenized_asset: "Tokenized asset",
+    settlement: "Settlement / value",
+    compliance: "Compliance / rule engine",
+    utility: "Utility / infrastructure",
+  };
+
+  const SOURCE_LABELS = {
+    new: "New template from scratch",
+    approved_params: "Approved template, new parameters",
+    modified: "Approved template, modified code",
+    third_party: "Third-party / OSS template",
+  };
+
+  const AUTHORITY_LABELS = {
+    firefly_kaleido: "FireFly under Kaleido",
+    safe_timelock: "Safe / Timelock",
+    factory: "Factory / CREATE2",
+    manual: "Manual developer wallet",
+  };
+
+  function recommendedRisk(purpose, impact, environment) {
+    if ((impact === "external" || impact === "both") && (purpose === "tokenized_asset" || purpose === "settlement")) return "critical";
+    if (impact === "external" || purpose === "tokenized_asset" || purpose === "settlement" || purpose === "compliance") return "high";
+    if (impact === "both") return "high";
+    return environment === "PROD" ? "medium" : "low";
+  }
+
+  function requiredEvidence(purpose, source, impact, risk) {
+    const required = new Set(["source_tests"]);
+    if (source !== "approved_params" || risk === "high" || risk === "critical") required.add("audit");
+    if (purpose === "tokenized_asset" || purpose === "settlement" || impact === "external" || impact === "both") {
+      required.add("legal");
+      required.add("dpia");
+    }
+    if (risk === "high" || risk === "critical") required.add("dora");
+    if (purpose === "tokenized_asset") required.add("reserve");
+    return required;
+  }
+
+  function onboardingValues() {
+    const chainId = $("#ob-chain").value;
+    const chain = (state.reference.chains || []).find((c) => c.id === chainId) || {};
+    const source = $("#ob-source").value;
+    const purpose = $("#ob-purpose").value;
+    const impact = $("#ob-impact").value;
+    const environment = chain.environment || "UAT";
+    const selectedRisk = $("#ob-risk").value;
+    const risk = selectedRisk === "auto" ? recommendedRisk(purpose, impact, environment) : selectedRisk;
+    const evidence = $$(".ob-evidence:checked").map((el) => el.value);
+    return {
+      contract_name: ($("#ob-name").value || "").trim(),
+      purpose,
+      code_source: source,
+      template_id: source === "approved_params" ? $("#ob-template").value : null,
+      division_id: $("#ob-division").value,
+      business_owner_id: $("#ob-owner").value,
+      requested_by: "p-priya",
+      chain_id: chainId,
+      environment,
+      user_impact: impact,
+      risk_tier: selectedRisk,
+      deployment_authority: $("#ob-authority").value,
+      evidence,
+      source_repo: ($("#ob-source-ref").value || "").trim(),
+      target_window: ($("#ob-window").value || "").trim(),
+      notes: ($("#ob-notes").value || "").trim(),
+      computed_risk: risk,
+    };
+  }
+
+  function populateOnboarding() {
+    const ref = state.reference || {};
+    if (!ref.chains || !ref.chains.length) return;
+    const chainSelect = $("#ob-chain");
+    if (!chainSelect.options.length) {
+      chainSelect.innerHTML = ref.chains.map((c) => `<option value="${esc(c.id)}">${esc(c.name)} · ${esc(c.environment)}</option>`).join("");
+      const preferred = ref.chains.find((c) => c.id === "ch-besu-uat") || ref.chains[0];
+      chainSelect.value = preferred.id;
+    }
+    const division = $("#ob-division");
+    if (!division.options.length) {
+      division.innerHTML = ref.org_units.map((o) => `<option value="${esc(o.id)}">${esc(o.name)} — ${esc(o.division)}</option>`).join("");
+      division.value = "org-gwm-da";
+    }
+    const owner = $("#ob-owner");
+    if (!owner.options.length) {
+      owner.innerHTML = ref.people.map((p) => `<option value="${esc(p.id)}">${esc(p.display_name)} — ${esc(p.title || "")}</option>`).join("");
+      owner.value = "p-elena";
+    }
+    const template = $("#ob-template");
+    if (!template.options.length) {
+      template.innerHTML = ref.templates.map((t) => `<option value="${esc(t.id)}">${esc(t.name)} v${esc(t.version)}</option>`).join("");
+      template.value = ref.templates.find((t) => t.id === "tpl-cmtat-300")?.id || ref.templates[0]?.id || "";
+    }
+    const source = $("#ob-source");
+    $("#ob-template-row").style.display = source.value === "approved_params" ? "" : "none";
+  }
+
+  function onboardingReviewHtml(values) {
+    const risk = values.computed_risk;
+    const gates = (state.reference.policies || []).filter((p) => p.object_type === "deployment" && p.risk_tier === risk).sort((a, b) => a.sequence - b.sequence);
+    const required = requiredEvidence(values.purpose, values.code_source, values.user_impact, risk);
+    const missing = [...required].filter((e) => !values.evidence.includes(e));
+    return `
+      <div class="review-grid">
+        <div><span>Contract</span><strong>${esc(values.contract_name || "—")}</strong></div>
+        <div><span>Purpose</span><strong>${esc(PURPOSE_LABELS[values.purpose] || values.purpose)}</strong></div>
+        <div><span>Path</span><strong>${esc(SOURCE_LABELS[values.code_source] || values.code_source)}</strong></div>
+        <div><span>Risk</span><strong>${riskBadge(risk)}</strong></div>
+        <div><span>Chain</span><strong>${esc((state.reference.chains.find((c) => c.id === values.chain_id) || {}).name || values.chain_id)} · ${esc(values.environment)}</strong></div>
+        <div><span>Users</span><strong>${esc(values.user_impact)}</strong></div>
+        <div><span>Deployment</span><strong>${esc(AUTHORITY_LABELS[values.deployment_authority] || values.deployment_authority)}</strong></div>
+        <div><span>Gates</span><strong>${gates.length} pending gates</strong></div>
+      </div>
+      <div class="detail-section"><h4>Required gates</h4><div>${gates.map((g) => `<span class="chip">${esc(g.gate)}</span>`).join("") || `<span class="muted small">No deployment gate policy for this tier.</span>`}</div></div>
+      <div class="detail-section"><h4>Evidence gaps</h4><div>${missing.length ? missing.map((e) => `<span class="chip red">${esc(state.reference.evidence_labels[e] || e)}</span>`).join("") : `<span class="chip green">All required evidence provided</span>`}</div></div>
+      <div class="form-note">This creates a <strong>pre-chain</strong> deployment request. FireFly/Kaleido will submit the signed deployment later. No on-chain address is created by this step.</div>`;
+  }
+
+  function updateOnboardingPreview() {
+    if (!state.reference.chains || !state.reference.chains.length) return;
+    const v = onboardingValues();
+    const risk = v.computed_risk;
+    const gates = (state.reference.policies || []).filter((p) => p.object_type === "deployment" && p.risk_tier === risk).sort((a, b) => a.sequence - b.sequence);
+    const required = requiredEvidence(v.purpose, v.code_source, v.user_impact, risk);
+    const missing = [...required].filter((e) => !v.evidence.includes(e));
+    const path = v.code_source === "approved_params" ? "Reuse approved template → deployment request" : "Draft template → template assurance → deployment request";
+    $("#onboarding-preview").innerHTML = `
+      <div class="preview-block"><div class="preview-label">Registration path</div><div class="preview-value">${esc(path)}</div></div>
+      <div class="preview-block"><div class="preview-label">Risk recommendation</div><div class="preview-value">${riskBadge(risk)} ${v.risk_tier === "auto" ? `<span class="tiny muted">auto from purpose, users and environment</span>` : ""}</div></div>
+      <div class="preview-block"><div class="preview-label">Deployment authority</div><div class="preview-value">${esc(AUTHORITY_LABELS[v.deployment_authority] || v.deployment_authority)}</div><div class="tiny muted">Signing identity: ${v.chain_id === "ch-besu-uat" ? "si-besu-uat-service" : v.chain_id === "ch-besu-prod" ? "si-besu-service" : "si-eth-service"}</div></div>
+      <div class="preview-block"><div class="preview-label">Required gates (${gates.length})</div><div>${gates.map((g) => `<span class="chip">${esc(g.gate)}</span>`).join("") || `<span class="muted small">No policy rows.</span>`}</div></div>
+      <div class="preview-block"><div class="preview-label">Evidence check</div><div class="preview-list"><div><span>Provided</span><span>${v.evidence.length}</span></div><div><span>Required</span><span>${required.size}</span></div></div><div class="mt-8">${missing.length ? missing.map((e) => `<span class="chip red">${esc(state.reference.evidence_labels[e] || e)}</span>`).join("") : `<span class="chip green">complete</span>`}</div></div>
+      <div class="form-note">Pre-chain only: no address, transaction or runtime hash exists until deployment. The same request ID will link to the FireFly/Kaleido deployment receipt.</div>`;
+    $("#onboarding-review").innerHTML = onboardingReviewHtml(v);
+  }
+
+  function showOnboardingStep(step) {
+    state.onboardingStep = Math.max(1, Math.min(4, step));
+    $$(".wizard-step").forEach((el) => el.classList.toggle("active", Number(el.dataset.step) === state.onboardingStep));
+    $$(".wizard-ruler span").forEach((el) => el.classList.toggle("active", Number(el.dataset.ruler) === state.onboardingStep));
+    $("#onboarding-step-label").textContent = `Step ${state.onboardingStep} of 4`;
+    $("#onboarding-progress-label").textContent = `${state.onboardingStep} / 4`;
+    $("#ob-back").style.display = state.onboardingStep === 1 ? "none" : "";
+    $("#ob-next").style.display = state.onboardingStep === 4 ? "none" : "";
+    $("#ob-create").style.display = state.onboardingStep === 4 ? "" : "none";
+    updateOnboardingPreview();
+  }
+
+  function renderOnboarding() {
+    populateOnboarding();
+    showOnboardingStep(state.onboardingStep);
   }
 
   // -----------------------------------------------------------------------
@@ -1301,7 +1466,7 @@
   // -----------------------------------------------------------------------
 
   async function loadAll() {
-    const [summary, inventory, templates, approvals, discovery, controls, council, registration] = await Promise.all([
+    const [summary, inventory, templates, approvals, discovery, controls, council, registration, reference] = await Promise.all([
       api("/api/summary"),
       api("/api/contracts"),
       api("/api/templates"),
@@ -1310,6 +1475,7 @@
       api("/api/controls"),
       api("/api/council"),
       api("/api/registrations"),
+      api("/api/reference"),
     ]);
     state.summary = summary;
     state.inventory = inventory.items || [];
@@ -1320,6 +1486,7 @@
     state.controls = controls;
     state.council = council;
     state.registration = registration;
+    state.reference = reference;
     state.loading = false;
     populateInventoryChains();
     populateTemplateCategories();
@@ -1335,6 +1502,7 @@
     if (!state.summary) return;
     renderOverview();
     renderRegistration();
+    renderOnboarding();
     renderInventory();
     renderTemplates();
     renderApprovals();
@@ -1437,6 +1605,62 @@
       else switchView("approvals");
     }
   });
+
+  async function submitOnboarding() {
+    const values = onboardingValues();
+    if (!values.contract_name) {
+      toast("Contract / product name is required.", "error");
+      showOnboardingStep(1);
+      return;
+    }
+    if (values.code_source === "approved_params" && !values.template_id) {
+      toast("Choose the approved template you are reusing.", "error");
+      showOnboardingStep(1);
+      return;
+    }
+    const button = $("#ob-create");
+    button.disabled = true;
+    button.textContent = "Creating…";
+    try {
+      const result = await api("/api/onboarding", {
+        method: "POST",
+        body: JSON.stringify(values),
+      });
+      const gaps = result.missing_evidence?.length || 0;
+      toast(`Created ${result.request_id} · ${gaps} evidence gap(s) · pre-chain only.`, gaps ? "info" : "success", 6500);
+      state.selectedRegistration = result.request_id;
+      state.onboardingStep = 1;
+      await loadAll();
+      switchView("registration");
+    } catch (error) {
+      toast(error.message, "error", 7000);
+    } finally {
+      button.disabled = false;
+      button.textContent = "Create pre-chain registration";
+    }
+  }
+
+  $("#ob-source").addEventListener("change", () => {
+    $("#ob-template-row").style.display = $("#ob-source").value === "approved_params" ? "" : "none";
+    updateOnboardingPreview();
+  });
+  $$("#onboarding-form input, #onboarding-form select, #onboarding-form textarea").forEach((el) => {
+    el.addEventListener("change", updateOnboardingPreview);
+    el.addEventListener("input", updateOnboardingPreview);
+  });
+  $("#ob-next").addEventListener("click", () => {
+    if (state.onboardingStep === 1 && !onboardingValues().contract_name) {
+      toast("Give the contract a name first.", "error");
+      return;
+    }
+    if (state.onboardingStep === 1 && $("#ob-source").value === "approved_params" && !$("#ob-template").value) {
+      toast("Choose an approved template.", "error");
+      return;
+    }
+    showOnboardingStep(state.onboardingStep + 1);
+  });
+  $("#ob-back").addEventListener("click", () => showOnboardingStep(state.onboardingStep - 1));
+  $("#ob-create").addEventListener("click", submitOnboarding);
 
   $("#inventory-search").addEventListener("input", renderInventory);
   $("#inventory-risk").addEventListener("change", renderInventory);

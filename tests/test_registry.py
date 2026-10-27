@@ -545,3 +545,33 @@ class ApiActionsTestCase(unittest.TestCase):
         self.assertEqual(by_id["DR-2026-0051"]["link_state"], "pre_chain")
         self.assertEqual(data["summary"]["pre_chain"], 3)
         self.assertEqual(data["summary"]["linked"], 4)
+
+    def test_onboarding_creates_prechain_request_with_firefly(self):
+        from app import onboarding, registrations  # noqa: PLC0415
+        status, body = onboarding(
+            self.conn,
+            {
+                "contract_name": "Onboarding API Test",
+                "purpose": "tokenized_asset",
+                "code_source": "new",
+                "division_id": "org-gwm-da",
+                "business_owner_id": "p-elena",
+                "chain_id": "ch-besu-uat",
+                "environment": "UAT",
+                "user_impact": "external",
+                "risk_tier": "auto",
+                "deployment_authority": "firefly_kaleido",
+                "evidence": ["source_tests", "legal", "dpia", "dora"],
+            },
+        )
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["risk_tier"], "critical")
+        self.assertEqual(body["deployment_platform"], "Kaleido FireFly")
+        self.assertIn("audit", body["missing_evidence"])
+        self.assertIn("reserve", body["missing_evidence"])
+        data = registrations(self.conn)
+        item = next(i for i in data["items"] if i["id"] == body["request_id"])
+        self.assertEqual(item["link_state"], "pre_chain")
+        self.assertIsNone(item["instance_id"])
+        self.assertEqual(item["deployment_platform"], "Kaleido FireFly")
+        self.assertGreater(len(item["gates"]), 0)

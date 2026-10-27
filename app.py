@@ -16,7 +16,7 @@ import json
 import mimetypes
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -27,7 +27,7 @@ DB_PATH = ROOT / "data" / "registry.db"
 WEB_ROOT = ROOT / "web"
 sys.path.insert(0, str(ROOT / "registry"))
 sys.path.insert(0, str(ROOT / "scripts"))
-from keccak import eip55  # noqa: E402
+from keccak import eip55, keccak256  # noqa: E402
 from besu_sync import run_mock  # noqa: E402
 
 
@@ -628,6 +628,24 @@ def council(conn) -> dict:
     }
 
 
+def reference(conn) -> dict:
+    return {
+        "chains": rows(conn, "SELECT id, name, network_type, environment, chain_id FROM chain ORDER BY environment, name"),
+        "org_units": rows(conn, "SELECT id, name, division, legal_entity FROM org_unit ORDER BY name"),
+        "people": rows(conn, "SELECT id, display_name, title, email FROM person WHERE active=1 ORDER BY display_name"),
+        "templates": rows(conn, "SELECT id, name, version, status, category, contract_type, default_risk_tier FROM template WHERE status='approved' ORDER BY name, version"),
+        "policies": rows(conn, "SELECT object_type, risk_tier, gate, required_role, sequence, blocking FROM approval_policy ORDER BY object_type, risk_tier, sequence"),
+        "evidence_labels": {
+            "source_tests": "Source + tests",
+            "audit": "Independent audit",
+            "legal": "Legal opinion / terms",
+            "dpia": "DPIA / privacy review",
+            "dora": "DORA / third-party review",
+            "reserve": "Proof of reserve",
+        },
+    }
+
+
 def registrations(conn) -> dict:
     items = rows(
         conn,
@@ -637,6 +655,8 @@ def registrations(conn) -> dict:
             dr.legal_entity, dr.jurisdiction, dr.risk_tier, dr.config_hash,
             dr.manifest_hash, dr.init_params_json, dr.salt, dr.status,
             dr.change_ticket, dr.target_window, dr.created_at, dr.approved_at, dr.notes,
+            dr.deployment_platform, dr.signing_identity_id, dr.evidence_json, dr.onboarding_source,
+            si.name AS signing_identity, si.key_type AS signing_identity_type,
             t.name AS template_name, t.version AS template_version,
             t.status AS template_status, t.runtime_code_hash AS template_runtime_hash,
             t.initcode_hash AS template_initcode_hash, t.audit_status, t.audit_valid_until,
@@ -663,6 +683,7 @@ def registrations(conn) -> dict:
         JOIN person req ON req.id = dr.requested_by
         JOIN person owner ON owner.id = dr.business_owner_id
         JOIN org_unit ou ON ou.id = dr.org_unit_id
+        LEFT JOIN signing_identity si ON si.id = dr.signing_identity_id
         LEFT JOIN v_deployment_readiness r ON r.id = dr.id
         ORDER BY CASE dr.status
             WHEN 'in_review' THEN 1 WHEN 'approved' THEN 2
@@ -727,6 +748,253 @@ def registrations(conn) -> dict:
             "in_review": sum(1 for i in items if i["status"] == "in_review"),
             "blocked": sum(1 for i in items if (i.get("readiness") or "").startswith("Blocked")),
         },
+    }
+
+
+
+PURPOSE_META = {
+    "tokenized_asset": ("token", "CMTAT"),
+    "settlement": ("settlement", "DvP"),
+    "compliance": ("compliance", "RuleEngine"),
+    "utility": ("utility", "Utility"),
+}
+
+EVIDENCE_LABELS = {
+    "source_tests": "Source + tests",
+    "audit": "Independent audit",
+    "legal": "Legal opinion / terms",
+    "dpia": "DPIA / privacy review",
+    "dora": "DORA / third-party review",
+    "reserve": "Proof of reserve",
+}
+
+
+def _slug(value: str) -> str:
+    return "".join(ch.lower() if ch.isalnum() else "-" for ch in value).strip("-")[:40] or "contract"
+
+
+def _recommend_risk(purpose: str, user_impact: str, environment: str) -> str:
+    if user_impact in ("external", "both") and purpose in ("tokenized_asset", "settlement"):
+        return "critical"
+    if user_impact == "external" or purpose in ("tokenized_asset", "settlement", "compliance"):
+        return "high"
+    if user_impact == "both":
+        return "high"
+    return "medium" if environment == "PROD" else "low"
+
+
+def _next_request_id(conn) -> str:
+    year = datetime.now(timezone.utc).year
+    prefix = f"DR-{year}-"
+    existing = conn.execute("SELECT id FROM deployment_request WHERE id LIKE ?", (prefix + "%",)).fetchall()
+    numbers = []
+    for row in existing:
+        try:
+            numbers.append(int(row["id"].split("-")[-1]))
+        except (ValueError, IndexError):
+            continue
+    return f"{prefix}{max(numbers, default=63) + 1:04d}"
+
+
+def onboarding(conn, payload: dict) -> tuple[int, dict]:
+    contract_name = (payload.get("contract_name") or "").strip()
+    purpose = payload.get("purpose")
+    code_source = payload.get("code_source")
+    chain_id = payload.get("chain_id")
+    environment = payload.get("environment")
+    division_id = payload.get("division_id")
+    business_owner_id = payload.get("business_owner_id")
+    requested_by = payload.get("requested_by") or "p-priya"
+    user_impact = payload.get("user_impact")
+    risk_tier = payload.get("risk_tier") or "auto"
+    authority = payload.get("deployment_authority")
+    evidence = [e for e in (payload.get("evidence") or []) if e in EVIDENCE_LABELS]
+    notes = (payload.get("notes") or "").strip()
+
+    if not contract_name:
+        return 400, {"error": "contract_name is required"}
+    if purpose not in PURPOSE_META:
+        return 400, {"error": "purpose is invalid"}
+    if code_source not in {"new", "approved_params", "modified", "third_party"}:
+        return 400, {"error": "code_source is invalid"}
+    if user_impact not in {"internal", "external", "both"}:
+        return 400, {"error": "user_impact is invalid"}
+    if authority not in {"firefly_kaleido", "safe_timelock", "manual", "factory"}:
+        return 400, {"error": "deployment_authority is invalid"}
+    chain = conn.execute("SELECT * FROM chain WHERE id = ?", (chain_id,)).fetchone()
+    if chain is None:
+        return 400, {"error": "chain not found"}
+    if chain["environment"] != environment:
+        return 400, {"error": f"chain is {chain['environment']}, request is {environment}"}
+    org = conn.execute("SELECT * FROM org_unit WHERE id = ?", (division_id,)).fetchone()
+    if org is None:
+        return 400, {"error": "division not found"}
+    owner = conn.execute("SELECT * FROM person WHERE id = ? AND active = 1", (business_owner_id,)).fetchone()
+    if owner is None:
+        return 400, {"error": "business owner not found or inactive"}
+    if requested_by and conn.execute("SELECT 1 FROM person WHERE id = ?", (requested_by,)).fetchone() is None:
+        return 400, {"error": "requester not found"}
+
+    if risk_tier == "auto":
+        risk_tier = _recommend_risk(purpose, user_impact, environment)
+    if risk_tier not in {"low", "medium", "high", "critical"}:
+        return 400, {"error": "risk tier is invalid"}
+
+    template_id = payload.get("template_id")
+    template = None
+    if code_source == "approved_params":
+        if not template_id:
+            return 400, {"error": "template_id is required when reusing an approved template"}
+        template = conn.execute("SELECT * FROM template WHERE id = ?", (template_id,)).fetchone()
+        if template is None:
+            return 400, {"error": "template not found"}
+    else:
+        ident = "tpl-onboard-" + keccak256(contract_name + utcnow())[:10]
+        category, contract_type = PURPOSE_META[purpose]
+        audit_status = "external" if "audit" in evidence else "none"
+        audit_until = (datetime.now(timezone.utc) + timedelta(days=365)).strftime("%Y-%m-%d") if audit_status == "external" else None
+        conn.execute(
+            """
+            INSERT INTO template
+              (id, template_key, name, version, category, contract_type, description,
+               source_repo, source_path, git_commit, compiler_version, evm_version, license,
+               initcode_hash, runtime_code_hash, abi_hash, audit_status, audit_provider,
+               audit_valid_until, ethtrust_level, default_risk_tier, owner_org_unit_id,
+               status, approved_at, retired_at, created_at, notes)
+            VALUES (?, ?, ?, '0.1.0', ?, ?, ?, ?, ?, ?, 'pending', 'pending', 'TBD',
+                    ?, ?, NULL, ?, ?, ?, NULL, ?, ?, 'draft', NULL, NULL, ?,
+                    'Created by onboarding. Replace draft hashes with the compiled artifact and complete template approval.')
+            """,
+            (
+                ident,
+                "ONBOARD_" + _slug(contract_name).upper() + "_" + datetime.now(timezone.utc).strftime("%m%d%H%M"),
+                contract_name,
+                category,
+                contract_type,
+                notes or f"Onboarding draft for {contract_name}",
+                payload.get("source_repo") or "pending",
+                payload.get("source_path") or "pending",
+                payload.get("git_commit") or "pending",
+                "0x" + keccak256("draft-init:" + ident),
+                "0x" + keccak256("draft-runtime:" + ident),
+                audit_status,
+                "Requester-provided — unverified" if audit_status == "external" else None,
+                audit_until,
+                risk_tier,
+                division_id,
+                utcnow(),
+            ),
+        )
+        template = conn.execute("SELECT * FROM template WHERE id = ?", (ident,)).fetchone()
+        for policy in conn.execute(
+            "SELECT * FROM approval_policy WHERE object_type='template' AND risk_tier=? ORDER BY sequence",
+            (risk_tier,),
+        ).fetchall():
+            conn.execute(
+                """
+                INSERT INTO signoff (id, object_type, object_id, gate, required_role, decision, created_at)
+                VALUES (?, 'template', ?, ?, ?, 'pending', ?)
+                """,
+                (f"so-{ident}-{policy['gate'].lower().replace(' ', '-')}", ident, policy["gate"], policy["required_role"], utcnow()),
+            )
+
+    request_id = _next_request_id(conn)
+    created = utcnow()
+    config_payload = {
+        "contract_name": contract_name,
+        "purpose": purpose,
+        "code_source": code_source,
+        "template_id": template["id"],
+        "chain_id": chain_id,
+        "environment": environment,
+        "user_impact": user_impact,
+        "risk_tier": risk_tier,
+        "evidence": sorted(evidence),
+    }
+    config_hash = "0x" + keccak256(json.dumps(config_payload, sort_keys=True))
+    manifest_hash = "0x" + keccak256(json.dumps({"config_hash": config_hash, "template": template["id"], "evidence": sorted(evidence)}, sort_keys=True))
+    salt = "0x" + keccak256("onboarding-salt:" + request_id)
+    platform = {
+        "firefly_kaleido": "Kaleido FireFly",
+        "safe_timelock": "Safe / Timelock",
+        "manual": "Manual developer wallet",
+        "factory": "Factory / CREATE2",
+    }[authority]
+    signing_identity = "si-besu-uat-service" if chain_id == "ch-besu-uat" else "si-besu-service" if chain_id == "ch-besu-prod" else "si-eth-service"
+    legal_entity = org["legal_entity"] or "Financial Institution AG"
+    jurisdiction = "LU" if "LUX" in division_id.upper() or "Luxembourg" in legal_entity else "CH"
+    conn.execute(
+        """
+        INSERT INTO deployment_request
+          (id, template_id, chain_id, environment, requested_by, business_owner_id,
+           org_unit_id, product_name, legal_entity, jurisdiction, risk_tier,
+           config_hash, init_params_json, salt, manifest_hash, deployment_platform,
+           signing_identity_id, evidence_json, onboarding_source, status,
+           change_ticket, target_window, created_at, approved_at, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                'in_review', ?, ?, ?, NULL, ?)
+        """,
+        (
+            request_id, template["id"], chain_id, environment, requested_by,
+            business_owner_id, division_id, contract_name, legal_entity, jurisdiction,
+            risk_tier, config_hash, json.dumps(config_payload, sort_keys=True), salt,
+            manifest_hash, platform, signing_identity, json.dumps(sorted(evidence)),
+            code_source, "ONB-" + request_id.split("-")[-1],
+            payload.get("target_window") or "TBD — onboarding", created,
+            notes or "Created by the onboarding wizard. Complete evidence and approvals before deployment.",
+        ),
+    )
+    for policy in conn.execute(
+        "SELECT * FROM approval_policy WHERE object_type='deployment' AND risk_tier=? ORDER BY sequence",
+        (risk_tier,),
+    ).fetchall():
+        conn.execute(
+            """
+            INSERT INTO signoff (id, object_type, object_id, gate, required_role, decision, created_at)
+            VALUES (?, 'deployment', ?, ?, ?, 'pending', ?)
+            """,
+            (f"so-{request_id.lower()}-{policy['gate'].lower().replace(' ', '-')}", request_id, policy["gate"], policy["required_role"], created),
+        )
+
+    required = {"source_tests"}
+    if code_source != "approved_params" or risk_tier in ("high", "critical"):
+        required.add("audit")
+    if purpose in ("tokenized_asset", "settlement") or user_impact in ("external", "both"):
+        required.update({"legal", "dpia"})
+    if risk_tier in ("high", "critical"):
+        required.add("dora")
+    if purpose == "tokenized_asset":
+        required.add("reserve")
+    missing = sorted(required - set(evidence))
+
+    conn.execute(
+        """
+        INSERT INTO audit_log (actor, actor_type, action, object_type, object_id,
+                               before_json, after_json, at, correlation_id)
+        VALUES (?, 'person', 'onboarding.created', 'deployment_request', ?, NULL, ?, ?, ?)
+        """,
+        (
+            requested_by, request_id,
+            json.dumps({"template": template["id"], "risk_tier": risk_tier, "platform": platform, "missing_evidence": missing}),
+            created, "onboarding-" + request_id,
+        ),
+    )
+    conn.commit()
+    return 200, {
+        "ok": True,
+        "request_id": request_id,
+        "template_id": template["id"],
+        "risk_tier": risk_tier,
+        "status": "in_review",
+        "deployment_platform": platform,
+        "signing_identity": signing_identity,
+        "gates": [p["gate"] for p in conn.execute(
+            "SELECT gate FROM approval_policy WHERE object_type='deployment' AND risk_tier=? ORDER BY sequence",
+            (risk_tier,),
+        ).fetchall()],
+        "provided_evidence": sorted(evidence),
+        "missing_evidence": missing,
+        "message": "Pre-chain registration created. No on-chain address exists until deployment.",
     }
 
 
@@ -970,6 +1238,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_json(200, approvals(conn))
             if route == "/api/registrations":
                 return self._send_json(200, registrations(conn))
+            if route == "/api/reference":
+                return self._send_json(200, reference(conn))
             if route == "/api/discovery":
                 return self._send_json(200, discovery(conn))
             if route == "/api/controls":
@@ -1000,6 +1270,9 @@ class Handler(BaseHTTPRequestHandler):
             parts = parsed.path.strip("/").split("/")
             if len(parts) == 4 and parts[0] == "api" and parts[1] == "signoffs" and parts[3] == "decision":
                 status, body = decide_signoff(conn, parts[2], payload)
+                return self._send_json(status, body)
+            if len(parts) == 2 and parts[0] == "api" and parts[1] == "onboarding":
+                status, body = onboarding(conn, payload)
                 return self._send_json(status, body)
             if len(parts) == 2 and parts[0] == "api" and parts[1] == "sync":
                 chain_id = payload.get("chain_id", "ch-besu-prod")
