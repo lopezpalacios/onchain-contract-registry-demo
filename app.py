@@ -28,7 +28,6 @@ WEB_ROOT = ROOT / "web"
 sys.path.insert(0, str(ROOT / "registry"))
 sys.path.insert(0, str(ROOT / "scripts"))
 from keccak import eip55, keccak256  # noqa: E402
-from besu_sync import run_mock  # noqa: E402
 
 
 def utcnow() -> str:
@@ -1297,6 +1296,8 @@ class Handler(BaseHTTPRequestHandler):
                 status, body = onboarding(conn, payload)
                 return self._send_json(status, body)
             if len(parts) == 2 and parts[0] == "api" and parts[1] == "sync":
+                from besu_sync import run_mock  # noqa: PLC0415
+
                 chain_id = payload.get("chain_id", "ch-besu-prod")
                 return self._send_json(200, run_mock(self.server.db.path, chain_id))
             return self._send_json(404, {"error": "unknown endpoint"})
