@@ -97,7 +97,7 @@ location.reload();
 |---|---|
 | `web/index.html` | The platform shell. |
 | `web/style.css` | The design system. |
-| `web/app.js` | Views, forms, approvals, modals, tour. |
+| `web/app.js` | Views, forms, approvals, modals, tour and the animated Flow view. |
 | `web/static-api.js` | Browser-only data API. Uses localStorage for writes. |
 | `web/data.js` | Generated SQLite snapshot. Do not edit by hand. |
 | `registry.sql` | SQLite schema, views, and seed data. |
@@ -114,13 +114,14 @@ Use these rules when you change the platform:
 1. Keep the runtime static. Do not add a server call.
 2. Keep SQLite as the build-time source.
 3. Regenerate `data.js` after a database change.
-4. Use short sentences. Use active voice.
-5. Use one term for one idea.
-6. Do not use bank names.
-7. Do not add real customer data, personal data, keys, or secrets.
-8. Keep the FireFly and Kaleido boundary. The platform does not sign transactions.
-9. Keep the pre-chain and on-chain states separate.
-10. Show evidence gaps. Do not hide them.
+4. Keep the tutorial cutout on four shade panels, not a large box-shadow. Large shadows show artefacts at browser zoom.
+5. Use short sentences. Use active voice.
+6. Use one term for one idea.
+7. Do not use bank names.
+8. Do not add real customer data, personal data, keys, or secrets.
+9. Keep the FireFly and Kaleido boundary. The platform does not sign transactions.
+10. Keep the pre-chain and on-chain states separate.
+11. Show evidence gaps. Do not hide them.
 
 ---
 

@@ -23,18 +23,37 @@ The tour must start on the first visit. It must have these steps:
 
 1. Why the platform exists.
 2. Read the Overview signals.
-3. Start at Onboarding.
-4. Answer the four onboarding steps.
-5. Review risk and evidence gaps.
-6. Show that the new record is pre-chain.
-7. Approve the gates in order.
-8. Link the on-chain record.
-9. Review Council and Controls.
-10. Start now.
+3. Follow the animated control flow.
+4. Start at Onboarding.
+5. Answer the four onboarding steps.
+6. Review risk and evidence gaps.
+7. Show that the new record is pre-chain.
+8. Approve the gates in order.
+9. Link the on-chain record.
+10. Review Council and Controls.
+11. Start now.
+
+The tour must highlight the target with a clean cutout and an arrow. Do not use a large CSS `box-shadow` as the page mask; it shows artefacts at browser zoom. Use four shade panels around the target and a separate ring.
+
+### Required Flow view
+
+Add a **Flow** view with an animated six-stage flow:
+
+1. Approved template.
+2. Pre-chain request.
+3. Gates and evidence.
+4. FireFly and Kaleido.
+5. On-chain instance.
+6. Reconciliation.
+
+Add a **Play flow** button. Animate the active stage and the connector. Show a detail panel for each stage. Add a two-column comparison: the pre-chain record of decision and the on-chain record of fact, linked by request ID and runtime code hash.
 
 Use short sentences. Use active voice. Use one term for one idea. Write all product text in **ASD-STE100 Simplified Technical English**. Do not use marketing language. Do not name a specific bank.
 
-The written guide is `docs/platform-guide.md`.
+The written guide is `docs/platform-guide.md`. It must start with two sections:
+
+1. Why a smart contract is a software component.
+2. Why the registry covers the pre-chain decision and the on-chain fact.
 
 Use this prompt with a capable coding agent. It is written to produce a runnable, dependency-light prototype, not a slide deck.
 

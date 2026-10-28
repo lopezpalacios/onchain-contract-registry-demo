@@ -19,6 +19,7 @@
     </a>
     <div class="nav-links" role="tablist" aria-label="Views">
       <button class="nav-link active" data-view="overview" role="tab" aria-selected="true">Overview</button>
+      <button class="nav-link" data-view="flow" role="tab" aria-selected="false">Flow</button>
       <button class="nav-link" data-view="registration" role="tab" aria-selected="false">Registration</button>
       <button class="nav-link" data-view="onboarding" role="tab" aria-selected="false">Onboarding</button>
       <button class="nav-link" data-view="inventory" role="tab" aria-selected="false">Inventory</button>
@@ -109,6 +110,128 @@
       <div class="footer">
         <span><strong>Demo data.</strong> Fictional bank, contracts, people and addresses. Not legal or investment advice.</span>
         <span>Registry v0.1 · SQLite · <span id="generated-at">—</span></span>
+      </div>
+    </section>
+
+    <!-- FLOW -->
+    <section id="view-flow" class="view" role="tabpanel" aria-label="Control flow">
+      <div class="view-intro">
+        <div>
+          <div class="eyebrow">Control plane · execution plane</div>
+          <h2>From approved code to on-chain proof</h2>
+          <p>The registry records intent and evidence. FireFly and Kaleido execute. The on-chain record closes the loop.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" id="flow-play" type="button">Play flow</button>
+          <button class="btn btn-outline" id="flow-reset" type="button">Reset</button>
+        </div>
+      </div>
+
+      <div class="flow-board">
+        <div class="flow-thesis" id="flow-thesis">
+          <span class="flow-thesis-label">The control question</span>
+          <p>Is the code on chain the code that was approved, for the request that was approved? A repository cannot answer that. A block explorer cannot answer that. The registry links the two records.</p>
+        </div>
+
+        <div class="flow-legend" aria-hidden="true">
+          <span><i class="flow-key control"></i> Control plane</span>
+          <span><i class="flow-key execution"></i> Execution plane</span>
+          <span><i class="flow-key proof"></i> Evidence</span>
+        </div>
+
+        <div class="flow-pipeline" id="flow-pipeline">
+          <article class="flow-node tone-control" data-flow-step="0">
+            <div class="flow-node-top"><span class="flow-index">01</span><span class="flow-kind">Code</span></div>
+            <h3>Approved template</h3>
+            <p>Version, source, tests, audit and runtime hash.</p>
+            <span class="flow-state">Control plane</span>
+          </article>
+          <div class="flow-connector" data-flow-link="0" aria-hidden="true"><span class="flow-wire"></span><span class="flow-packet"></span></div>
+          <article class="flow-node tone-control" data-flow-step="1">
+            <div class="flow-node-top"><span class="flow-index">02</span><span class="flow-kind">Intent</span></div>
+            <h3>Pre-chain request</h3>
+            <p>Product, chain, risk tier, config and manifest hash.</p>
+            <span class="flow-state">No address</span>
+          </article>
+          <div class="flow-connector" data-flow-link="1" aria-hidden="true"><span class="flow-wire"></span><span class="flow-packet"></span></div>
+          <article class="flow-node tone-control" data-flow-step="2">
+            <div class="flow-node-top"><span class="flow-index">03</span><span class="flow-kind">Control</span></div>
+            <h3>Gates and evidence</h3>
+            <p>Role, order, four-eyes, expiry and gaps.</p>
+            <span class="flow-state">Decision</span>
+          </article>
+          <div class="flow-connector" data-flow-link="2" aria-hidden="true"><span class="flow-wire"></span><span class="flow-packet"></span></div>
+          <article class="flow-node tone-execution" data-flow-step="3">
+            <div class="flow-node-top"><span class="flow-index">04</span><span class="flow-kind">Execute</span></div>
+            <h3>FireFly / Kaleido</h3>
+            <p>FireFly submits. Kaleido signs and permits.</p>
+            <span class="flow-state">Execution plane</span>
+          </article>
+          <div class="flow-connector" data-flow-link="3" aria-hidden="true"><span class="flow-wire"></span><span class="flow-packet"></span></div>
+          <article class="flow-node tone-proof" data-flow-step="4">
+            <div class="flow-node-top"><span class="flow-index">05</span><span class="flow-kind">Proof</span></div>
+            <h3>On-chain instance</h3>
+            <p>Address, transaction, block and runtime hash.</p>
+            <span class="flow-state">Chain fact</span>
+          </article>
+          <div class="flow-connector" data-flow-link="4" aria-hidden="true"><span class="flow-wire"></span><span class="flow-packet"></span></div>
+          <article class="flow-node tone-control" data-flow-step="5">
+            <div class="flow-node-top"><span class="flow-index">06</span><span class="flow-kind">Monitor</span></div>
+            <h3>Reconciliation</h3>
+            <p>Match the runtime hash. Quarantine unknown code.</p>
+            <span class="flow-state">Continuous</span>
+          </article>
+        </div>
+
+        <div class="flow-detail" id="flow-detail" aria-live="polite">
+          <div class="flow-detail-top">
+            <span class="flow-detail-label" id="flow-detail-label">Step 1 of 6 · Control plane</span>
+            <span class="flow-detail-link" id="flow-detail-link">Template → request</span>
+          </div>
+          <p id="flow-detail-text">A smart contract starts as software. The template records the exact code, tests, audit and runtime hash that the institution approved.</p>
+          <div class="flow-detail-progress" aria-hidden="true"><span id="flow-detail-bar"></span></div>
+        </div>
+      </div>
+
+      <div class="flow-states">
+        <article class="flow-state-card">
+          <div class="flow-state-head">
+            <span class="flow-state-tag">Before deployment</span>
+            <span class="flow-state-pill">Pre-chain</span>
+          </div>
+          <h3>The record of decision</h3>
+          <p>The institution records what it intends to deploy, why, for which users, and who accepted the risk.</p>
+          <div class="flow-facts">
+            <div><span>Template + version</span><strong>Approved code</strong></div>
+            <div><span>Config hash</span><strong>Exact parameters</strong></div>
+            <div><span>Approval gates</span><strong>Roles + evidence</strong></div>
+            <div><span>Deployment authority</span><strong>FireFly / Kaleido</strong></div>
+            <div><span>On-chain address</span><strong>Does not exist yet</strong></div>
+          </div>
+        </article>
+
+        <div class="flow-bridge" id="flow-bridge">
+          <span class="flow-bridge-kicker">The link</span>
+          <div class="flow-bridge-badge">Hash match</div>
+          <span class="flow-bridge-line" aria-hidden="true"></span>
+          <p>Same request ID. Same runtime code hash. A mismatch opens an incident.</p>
+        </div>
+
+        <article class="flow-state-card">
+          <div class="flow-state-head">
+            <span class="flow-state-tag">After deployment</span>
+            <span class="flow-state-pill">On-chain</span>
+          </div>
+          <h3>The record of fact</h3>
+          <p>The chain records what exists: the address, the transaction, the runtime code, the admin and the state.</p>
+          <div class="flow-facts">
+            <div><span>Address</span><strong>Chain location</strong></div>
+            <div><span>Transaction + block</span><strong>Deployment proof</strong></div>
+            <div><span>Runtime code hash</span><strong>Actual code</strong></div>
+            <div><span>Proxy + implementation</span><strong>Upgrade path</strong></div>
+            <div><span>Admin + state</span><strong>Control surface</strong></div>
+          </div>
+        </article>
       </div>
     </section>
 
@@ -413,9 +536,16 @@
     </div>
   </div>
   <div id="tour-layer" role="dialog" aria-modal="true" aria-labelledby="tour-title">
-    <div id="tour-spotlight" aria-hidden="true"></div>
-    <div id="tour-popover" data-placement="bottom">
-      <div class="tour-eyebrow">Platform tour · <span id="tour-step-count">1 / 9</span></div>
+    <div id="tour-shade" aria-hidden="true">
+      <div class="tour-shade-panel" data-shade="top"></div>
+      <div class="tour-shade-panel" data-shade="bottom"></div>
+      <div class="tour-shade-panel" data-shade="left"></div>
+      <div class="tour-shade-panel" data-shade="right"></div>
+    </div>
+    <div id="tour-ring" aria-hidden="true"></div>
+    <div id="tour-popover" data-placement="bottom" tabindex="-1">
+      <div class="tour-eyebrow">Platform tour · <span id="tour-step-count">1 / 11</span></div>
+      <div class="tour-dots" id="tour-dots" aria-hidden="true"></div>
       <div class="tour-title" id="tour-title"></div>
       <div class="tour-body" id="tour-body"></div>
       <div class="tour-actions">

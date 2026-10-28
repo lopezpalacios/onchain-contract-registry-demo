@@ -13,6 +13,16 @@ The demo is built around a fictional financial institution and a tokenized-gold 
 
 ---
 
+## Why this exists
+
+A smart contract is software before it is a transaction. It has source code, dependencies, a build, tests, an audit, an owner, a deployed runtime and an admin path. It can also hold value and cannot always be reversed. The institution must control the software lifecycle and the deployed instance.
+
+A repository tag shows intent. A block explorer shows an address. Neither proves the link between them. The registry keeps a **pre-chain record** (should this contract exist?) and an **on-chain record** (what exists?), then links them by request ID and runtime code hash. FireFly and Kaleido execute. The registry does not sign.
+
+Read the full reasoning in **[docs/platform-guide.md](docs/platform-guide.md)**.
+
+---
+
 ## Quick start
 
 ```bash
@@ -49,6 +59,7 @@ The current build has **26 templates**, **25 contract records** (16 logical prod
 | View | What it demonstrates |
 |---|---|
 | **Overview** | Coverage, risk mix, reserve coverage, approval queue, expiring evidence and unknown-contract alerts. |
+| **Flow** | Animated control-plane and execution-plane flow: template, pre-chain request, gates, FireFly/Kaleido, on-chain instance, reconciliation. |
 | **Registration** | The pre-chain record — template, request, config/manifest hash and approvals — linked to the deployed address, transaction, block, proxy and runtime-code hash. |
 | **Onboarding** | Four-step wizard: purpose, code source, chain, user impact, risk, FireFly/Kaleido authority and evidence. Creates a pre-chain request with computed gates and visible gaps. |
 | **Inventory** | One row per logical deployment; proxy/implementation and supporting contracts are linked, not counted as products. |
@@ -60,16 +71,17 @@ The current build has **26 templates**, **25 contract records** (16 logical prod
 
 Try these flows:
 
-1. Open **Onboarding**, complete the four steps with the default **FireFly under Kaleido** authority, and create a pre-chain registration. It appears immediately in **Registration** with no address.
-2. Open **Registration → DR-2026-0031**. The pre-chain request is linked to the deployed public token at `0x919d…94c6`; the same record shows the deployment transaction, block, runtime hash and proxy/implementation links.
-3. Open **Inventory → UBGX Gold Token (Public)**. It is a UUPS proxy; the implementation is a separate on-chain record, and the admin is a 48-hour timelock controlled by a 3-of-5 Safe.
-4. Open **Templates → CMTAT Standard 3.0.0**. It has three logical deployments on two chains. Open **CMTAT Standard 3.2.0**; it is blocked because the independent audit is missing/expired.
-5. Open **Approvals → UBGX Pilot 3.2**. Business and Compliance approved, but the next gate is blocked by the template. The final CAB gate cannot be completed.
-6. Open **Approvals → UBGX Gold Token (Luxembourg)** and review **LEGAL** as Daniel Roth. The wrong actor is rejected; the eligible actor succeeds.
-7. Open **Reconciliation**. `disc-001`, `disc-002` and `disc-003` are unknown contracts. `disc-003` is a 94%-similar CMTAT clone on Ethereum mainnet, quarantined as critical.
-8. Click **Run Besu sync** to exercise the mock adapter; it writes a new unknown-contract discovery and a sync run.
-9. Open **Council**. Review the 20 findings from Compliance, Legal, Operational Risk, Security, DPO, Finance, Business and Regulator. Open a finding/contract to see the compliance profile and signer identity.
-10. Open **Controls**. SC-05 is an exception because the country-restriction rule admin is an EOA; SC-04 is an exception because the DvP contract was backfilled without complete CAB evidence. Both are owned and approved.
+1. Open **Flow** and select **Play flow**. It shows the hand-off from approved template to pre-chain request, gates, FireFly/Kaleido, on-chain instance and reconciliation.
+2. Open **Onboarding**, complete the four steps with the default **FireFly under Kaleido** authority, and create a pre-chain registration. It appears immediately in **Registration** with no address.
+3. Open **Registration → DR-2026-0031**. The pre-chain request is linked to the deployed public token at `0x919d…94c6`; the same record shows the deployment transaction, block, runtime hash and proxy/implementation links.
+4. Open **Inventory → UBGX Gold Token (Public)**. It is a UUPS proxy; the implementation is a separate on-chain record, and the admin is a 48-hour timelock controlled by a 3-of-5 Safe.
+5. Open **Templates → CMTAT Standard 3.0.0**. It has three logical deployments on two chains. Open **CMTAT Standard 3.2.0**; it is blocked because the independent audit is missing/expired.
+6. Open **Approvals → UBGX Pilot 3.2**. Business and Compliance approved, but the next gate is blocked by the template. The final CAB gate cannot be completed.
+7. Open **Approvals → UBGX Gold Token (Luxembourg)** and review **LEGAL** as Daniel Roth. The wrong actor is rejected; the eligible actor succeeds.
+8. Open **Reconciliation**. `disc-001`, `disc-002` and `disc-003` are unknown contracts. `disc-003` is a 94%-similar CMTAT clone on Ethereum mainnet, quarantined as critical.
+9. Click **Run Besu sync** to exercise the mock adapter; it writes a new unknown-contract discovery and a sync run.
+10. Open **Council**. Review the 20 findings from Compliance, Legal, Operational Risk, Security, DPO, Finance, Business and Regulator. Open a finding/contract to see the compliance profile and signer identity.
+11. Open **Controls**. SC-05 is an exception because the country-restriction rule admin is an EOA; SC-04 is an exception because the DvP contract was backfilled without complete CAB evidence. Both are owned and approved.
 
 ---
 

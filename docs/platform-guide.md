@@ -4,7 +4,82 @@ This guide uses ASD-STE100 Simplified Technical English. It uses short sentences
 
 ---
 
-## 1. Why we built this platform
+## 1. Why a smart contract is a software component
+
+A smart contract is software. It has source code. It has dependencies. It has a build. It has tests. It has bugs. It has an owner. It runs on a computer that other people also use.
+
+A smart contract is not a legal contract. It is code that executes a rule. The legal agreement, the product terms and the code are separate objects. Each object needs its own owner and evidence.
+
+A smart contract has properties that other software does not have all of:
+
+- It can hold and move value.
+- A transaction can be irreversible.
+- On a public chain, any person can call a public function.
+- An upgrade can change behavior after approval.
+- An admin key or proxy admin can change the contract.
+- Its state and dependencies live outside the repository.
+
+These properties do not remove the need for software controls. They increase the need.
+
+The institution must control:
+
+- the source repository and commit;
+- the build and compiler settings;
+- the tests and static analysis;
+- the independent audit;
+- the release and approval;
+- the deployed runtime bytecode;
+- the proxy admin and upgrade path;
+- the incident and patch process.
+
+A repository tag is not enough. It shows what a team intended to release. It does not show what runs at an address.
+
+A block explorer is not enough. It shows what runs at an address. It does not show who approved it, why, or with what evidence.
+
+The registry treats the contract as a software component with a lifecycle. It links the software record to the deployed record.
+
+---
+
+## 2. Why the registry covers pre-chain and on-chain
+
+The registry has two records for one contract. They answer different questions.
+
+The **pre-chain record** answers: **should this contract exist?**
+
+It has the template and version, the product and purpose, the chain and environment, the risk tier, the config hash, the manifest hash, the approval gates, the evidence, and the signing identity. No address exists at this point.
+
+The **on-chain record** answers: **what exists?**
+
+It has the address, the deployment transaction, the block, the runtime code hash, the proxy and implementation, the admin, and the state. The chain does not know who approved the deployment.
+
+The **link** answers: **is the code on chain the code that was approved?**
+
+The link uses the deployment request ID, the template runtime hash, the on-chain runtime hash, the transaction, and the block. If the hashes do not match, the registry shows a mismatch. A mismatch is an incident, not a display error.
+
+| Control question | Record that answers it |
+|---|---|
+| Is this code approved? | Template with version and runtime hash. |
+| Is this deployment allowed? | Pre-chain request with gates and evidence. |
+| Is this the code that runs? | On-chain runtime hash. |
+| Who can change it? | Proxy admin, roles and signing identity. |
+| Is the evidence current? | Evidence with an expiry date. |
+| Is it still the same? | Reconciliation against the chain. |
+
+Do not merge these records.
+
+- If you keep only the repository, you control intent but not runtime.
+- If you keep only the block explorer, you see runtime but not authority.
+- If you keep only a spreadsheet, you have neither integrity nor proof.
+
+This separation is not a workflow preference. It is the separation of decision from fact.
+
+The chain is a runtime, not a register of intent. FireFly and Kaleido are the execution plane. The registry is the control plane. The registry does not sign. It proves what was approved and what was deployed.
+
+The registry does not put approval comments or evidence on the chain. That data is private and large. The chain holds the runtime. The registry holds the decision and the evidence. A hash connects the two records.
+
+---
+
+## 3. What problem the platform fixes
 
 A financial institution has many smart contracts. Teams keep different records. A developer uses a repository. A business team uses a spreadsheet. An auditor uses a block explorer. No person can see the full record.
 
@@ -28,7 +103,7 @@ The platform gives one controlled record for each contract. The record answers f
 
 ---
 
-## 2. What the platform does
+## 4. What the platform does
 
 The platform records five objects:
 
@@ -58,7 +133,7 @@ The platform shows three states:
 
 ---
 
-## 3. What the platform does not do
+## 5. What the platform does not do
 
 - It does not sign a transaction.
 - It does not hold a private key.
@@ -72,7 +147,7 @@ FireFly submits the deployment. Kaleido signs the transaction and enforces permi
 
 ---
 
-## 4. How to use the platform
+## 6. How to use the platform
 
 ### Step 1 — Open Overview
 
@@ -81,6 +156,8 @@ Open **Overview**.
 Read the six measures. Read the approval queue. Read the attention list.
 
 Use this screen to find work that is late, blocked, or missing evidence.
+
+Open **Flow** and select **Play flow** to see the hand-off from template to pre-chain request, gates, FireFly/Kaleido, on-chain instance and reconciliation.
 
 ### Step 2 — Start a registration
 
@@ -201,7 +278,7 @@ Do not close an exception without a second approver and an expiry date.
 
 ---
 
-## 5. Terms
+## 7. Terms
 
 Use these terms in the user interface and in meetings:
 
@@ -215,6 +292,10 @@ Use these terms in the user interface and in meetings:
 | **Ready** | All blocking gates are approved and the template is valid. |
 | **Linked** | The request has a verified on-chain record. |
 | **Mismatch** | The on-chain runtime hash does not match the template. |
+| **Control plane** | The registry. It records intent, approval and evidence. It does not sign transactions. |
+| **Execution plane** | FireFly, Kaleido and the chain. It submits, signs and runs the contract. |
+| **Pre-chain record** | The decision record before an address exists. |
+| **On-chain record** | The fact record after deployment. |
 
 Do not use these terms:
 
@@ -225,23 +306,27 @@ Do not use these terms:
 
 ---
 
-## 6. Two-minute presentation script
+## 8. Two-minute presentation script
 
 > This is a contract control platform. It does not deploy contracts. It controls the record before and after deployment.
 >
-> The problem is simple. A bank can approve a template. A developer can deploy it. But the bank cannot always link the approval to the address.
+> Open Flow and select Play flow. It shows the hand-off from approved template to pre-chain request, gates, FireFly/Kaleido, on-chain instance and reconciliation.
+>
+> Treat a smart contract as software. It has a source, a build, tests, an audit, an owner, and a runtime. It can hold value. It can be upgraded. It can be called by anyone on a public chain. The controls must cover the software lifecycle and the deployed instance.
+>
+> The problem is simple. A financial institution can approve a template. A developer can deploy it. But the institution cannot always link the approval to the address.
 >
 > The platform has four layers. Template. Deployment request. Contract instance. Evidence.
 >
 > Start at Onboarding. The business division enters the purpose, the chain, the users, and the risk. The platform calculates the gates and shows the missing evidence.
 >
-> The record is pre-chain. It has no address.
+> The record is pre-chain. It has no address. It answers: should this contract exist?
 >
 > The approvers work in order. Business. Compliance. Legal. Risk. Security. Operations. Change board.
 >
 > When the record is ready, FireFly submits the deployment. Kaleido signs it. The platform syncs the receipt.
 >
-> Registration shows the same request with the address, transaction, block, and code hash. If the hashes match, the link is valid. If they do not match, the platform shows a mismatch.
+> Registration shows the same request with the address, transaction, block, and code hash. It answers: what exists? If the hashes match, the link is valid. If they do not match, the platform shows a mismatch.
 >
 > Council shows what each control role still does not accept. It shows the evidence gaps. It does not hide them.
 >
@@ -249,11 +334,12 @@ Do not use these terms:
 
 ---
 
-## 7. Presentation checklist
+## 9. Presentation checklist
 
 Before the demo:
 
 - [ ] Open `web/index.html` or serve the `web` directory.
+- [ ] Open **Flow** and test **Play flow**.
 - [ ] Clear the demo state if needed: run `localStorage.removeItem("onchain-registry-static-v1")` in the browser console.
 - [ ] Set the browser to 1440 px width.
 - [ ] Start at **Overview**.

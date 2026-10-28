@@ -16,6 +16,7 @@
     selectedRegistration: "DR-2026-0031",
     approvalIndex: {},
     view: "overview",
+    flowStep: 0,
     loading: true,
   };
 
@@ -402,6 +403,107 @@
   }
 
   // -----------------------------------------------------------------------
+  // Presentation flow
+  // -----------------------------------------------------------------------
+
+  const FLOW_STEPS = [
+    {
+      lane: "Control plane",
+      link: "Template → request",
+      detail: "A smart contract starts as software. The template records the exact code, tests, audit and runtime hash that the institution approved.",
+    },
+    {
+      lane: "Control plane",
+      link: "Request → gates",
+      detail: "The business records intent before code gets authority. The request has a product, chain, risk tier, config hash and manifest hash. No address exists yet.",
+    },
+    {
+      lane: "Control plane",
+      link: "Gates → execution",
+      detail: "Approvers work in a fixed order. The requester cannot approve. One person cannot approve two blocking gates. A gate without evidence stays visible.",
+    },
+    {
+      lane: "Execution plane",
+      link: "Signed manifest → chain",
+      detail: "FireFly submits the signed manifest. Kaleido enforces permission and signs the transaction. The registry does not hold keys and does not sign.",
+    },
+    {
+      lane: "Evidence",
+      link: "Chain fact → registry",
+      detail: "The chain returns a fact: address, transaction, block and runtime code hash. The registry links this fact to the deployment request ID.",
+    },
+    {
+      lane: "Control plane",
+      link: "Registry → chain",
+      detail: "Reconciliation compares the template runtime hash with the on-chain runtime hash. A mismatch is an incident. Unknown code goes to quarantine.",
+    },
+  ];
+
+  let flowTimer = null;
+  let flowPlaying = false;
+
+  function setFlowStep(index) {
+    const next = Math.max(0, Math.min(FLOW_STEPS.length - 1, index));
+    state.flowStep = next;
+    $$("[data-flow-step]").forEach((node, i) => {
+      node.classList.toggle("active", i === next);
+      node.classList.toggle("done", i < next);
+      node.setAttribute("aria-current", i === next ? "step" : "false");
+    });
+    $$("[data-flow-link]").forEach((link, i) => link.classList.toggle("active", i < next));
+    const step = FLOW_STEPS[next];
+    const label = $("#flow-detail-label");
+    const link = $("#flow-detail-link");
+    const text = $("#flow-detail-text");
+    const bar = $("#flow-detail-bar");
+    if (label) label.textContent = `Step ${next + 1} of ${FLOW_STEPS.length} · ${step.lane}`;
+    if (link) link.textContent = step.link;
+    if (text) text.textContent = step.detail;
+    if (bar) bar.style.width = `${((next + 1) / FLOW_STEPS.length) * 100}%`;
+  }
+
+  function stopFlow() {
+    if (flowTimer) window.clearTimeout(flowTimer);
+    flowTimer = null;
+    flowPlaying = false;
+    $("#flow-pipeline")?.classList.remove("playing");
+    const button = $("#flow-play");
+    if (button) button.textContent = state.flowStep === FLOW_STEPS.length - 1 ? "Replay" : "Play flow";
+  }
+
+  function playFlow() {
+    stopFlow();
+    setFlowStep(0);
+    flowPlaying = true;
+    $("#flow-pipeline")?.classList.add("playing");
+    const button = $("#flow-play");
+    if (button) button.textContent = "Playing…";
+    const tick = () => {
+      if (!flowPlaying) return;
+      if (state.flowStep >= FLOW_STEPS.length - 1) {
+        stopFlow();
+        return;
+      }
+      setFlowStep(state.flowStep + 1);
+      flowTimer = window.setTimeout(tick, 1300);
+    };
+    flowTimer = window.setTimeout(tick, 800);
+  }
+
+  function resetFlow() {
+    stopFlow();
+    setFlowStep(0);
+    const button = $("#flow-play");
+    if (button) button.textContent = "Play flow";
+  }
+
+  function renderFlow() {
+    setFlowStep(state.flowStep || 0);
+    const button = $("#flow-play");
+    if (button && !flowPlaying) button.textContent = state.flowStep === FLOW_STEPS.length - 1 ? "Replay" : "Play flow";
+  }
+
+  // -----------------------------------------------------------------------
   // Registration: pre-chain record -> on-chain instance
   // -----------------------------------------------------------------------
 
@@ -606,6 +708,42 @@
     };
   }
 
+  function orgAncestorIds(orgUnitId) {
+    const ref = state.reference || {};
+    const byId = new Map((ref.org_units || []).map((unit) => [unit.id, unit]));
+    const result = new Set();
+    let current = orgUnitId ? byId.get(orgUnitId) : null;
+    while (current) {
+      result.add(current.id);
+      current = current.parent_id ? byId.get(current.parent_id) : null;
+    }
+    return result;
+  }
+
+  function personHasRole(personId, roleCode, orgUnitId) {
+    const ref = state.reference || {};
+    const today = new Date().toISOString().slice(0, 10);
+    const allowed = orgUnitId ? orgAncestorIds(orgUnitId) : new Set();
+    return (ref.role_assignments || []).some((assignment) => {
+      if (assignment.person_id !== personId || assignment.role_code !== roleCode || !assignment.active) return false;
+      if (assignment.valid_from && assignment.valid_from > today) return false;
+      if (assignment.valid_to && assignment.valid_to < today) return false;
+      return assignment.scope_org_unit_id == null || !orgUnitId || allowed.has(assignment.scope_org_unit_id);
+    });
+  }
+
+  function populateOwnerOptions() {
+    const ref = state.reference || {};
+    const divisionId = $("#ob-division").value;
+    const owner = $("#ob-owner");
+    const current = owner.value;
+    let people = (ref.people || []).filter((person) => personHasRole(person.id, "Business Owner", divisionId));
+    if (!people.length) people = ref.people || [];
+    owner.innerHTML = people.map((person) => `<option value="${esc(person.id)}">${esc(person.display_name)} — ${esc(person.title || "")}</option>`).join("");
+    if (people.some((person) => person.id === current)) owner.value = current;
+    else if (people.length) owner.value = people[0].id;
+  }
+
   function populateOnboarding() {
     const ref = state.reference || {};
     if (!ref.chains || !ref.chains.length) return;
@@ -618,13 +756,9 @@
     const division = $("#ob-division");
     if (!division.options.length) {
       division.innerHTML = ref.org_units.map((o) => `<option value="${esc(o.id)}">${esc(o.name)} — ${esc(o.division)}</option>`).join("");
-      division.value = "org-gwm-da";
+      division.value = "org-gwm-com";
     }
-    const owner = $("#ob-owner");
-    if (!owner.options.length) {
-      owner.innerHTML = ref.people.map((p) => `<option value="${esc(p.id)}">${esc(p.display_name)} — ${esc(p.title || "")}</option>`).join("");
-      owner.value = "p-elena";
-    }
+    populateOwnerOptions();
     const template = $("#ob-template");
     if (!template.options.length) {
       template.innerHTML = ref.templates.map((t) => `<option value="${esc(t.id)}">${esc(t.name)} v${esc(t.version)}</option>`).join("");
@@ -1539,6 +1673,7 @@
   function renderAll() {
     if (!state.summary) return;
     renderOverview();
+    renderFlow();
     renderRegistration();
     renderOnboarding();
     renderInventory();
@@ -1691,6 +1826,10 @@
     $("#ob-template-row").style.display = $("#ob-source").value === "approved_params" ? "" : "none";
     updateOnboardingPreview();
   });
+  $("#ob-division").addEventListener("change", () => {
+    populateOwnerOptions();
+    updateOnboardingPreview();
+  });
   $$("#onboarding-form input, #onboarding-form select, #onboarding-form textarea").forEach((el) => {
     el.addEventListener("change", updateOnboardingPreview);
     el.addEventListener("input", updateOnboardingPreview);
@@ -1721,6 +1860,8 @@
   $("#template-status").addEventListener("change", renderTemplates);
   $("#export-btn").addEventListener("click", exportRegister);
   $("#sync-btn").addEventListener("click", runSync);
+  $("#flow-play").addEventListener("click", playFlow);
+  $("#flow-reset").addEventListener("click", resetFlow);
 
   $("#modal-backdrop").addEventListener("click", (event) => {
     if (event.target === $("#modal-backdrop")) closeModal();
@@ -1763,12 +1904,17 @@
     {
       view: "overview", center: true,
       title: "Why this platform exists",
-      body: "Teams use different records. The bank cannot link an approval to an address. This platform keeps one controlled record.",
+      body: "A smart contract is software. It needs source control, tests, approval, and a deployed runtime record. Teams keep these records in different places. The institution cannot link them.",
     },
     {
       view: "overview", target: "#kpi-grid", placement: "bottom",
       title: "Read the signals",
       body: "The Overview shows six measures. It shows the approval queue and the attention list. Use it to find blocked work.",
+    },
+    {
+      view: "flow", target: "#flow-thesis", placement: "bottom",
+      title: "Follow the control flow",
+      body: "The flow is playing behind this card. The registry records the decision. FireFly and Kaleido execute it. The chain returns a fact.",
     },
     {
       view: "overview", target: '[data-view="onboarding"]', placement: "bottom",
@@ -1808,54 +1954,107 @@
     {
       view: "overview", center: true,
       title: "Start now",
-      body: "Select Onboarding to start a registration. Select Platform tour to repeat this guide.",
+      body: "Start at Onboarding. The record is pre-chain. Approve the gates. Deploy with FireFly. Link the address and runtime hash.",
     },
   ];
 
   let tourIndex = 0;
   let tourActive = false;
   let tourBusy = false;
+  let tourReturnFocus = null;
   const tourLayer = $("#tour-layer");
   const tourPopover = $("#tour-popover");
-  const tourSpotlight = $("#tour-spotlight");
+  const tourRing = $("#tour-ring");
+  const tourDots = $("#tour-dots");
+  const tourShade = {
+    top: $('[data-shade="top"]'),
+    bottom: $('[data-shade="bottom"]'),
+    left: $('[data-shade="left"]'),
+    right: $('[data-shade="right"]'),
+  };
 
   function tourWait(ms) {
     return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
 
+  async function waitForTourTarget(selector, timeout = 1800) {
+    const started = performance.now();
+    while (performance.now() - started < timeout) {
+      const target = $(selector);
+      if (target) {
+        const rect = target.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) return target;
+      }
+      await tourWait(50);
+    }
+    return $(selector);
+  }
+
+  function setTourDots() {
+    if (!tourDots) return;
+    tourDots.innerHTML = TOUR_STEPS.map((_, index) => {
+      const cls = index === tourIndex ? "tour-dot active" : index < tourIndex ? "tour-dot done" : "tour-dot";
+      return `<span class="${cls}"></span>`;
+    }).join("");
+  }
+
+  function centerTour() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    tourShade.top.style.cssText = `left:0;top:0;width:${width}px;height:${height}px`;
+    tourShade.bottom.style.cssText = "left:0;top:0;width:0;height:0";
+    tourShade.left.style.cssText = "left:0;top:0;width:0;height:0";
+    tourShade.right.style.cssText = "left:0;top:0;width:0;height:0";
+    tourRing.hidden = true;
+    tourPopover.classList.add("center");
+    tourPopover.dataset.placement = "center";
+    tourPopover.style.left = "";
+    tourPopover.style.top = "";
+    tourPopover.style.removeProperty("--arrow-left");
+  }
+
   function positionTour(step) {
     const target = step.target ? $(step.target) : null;
     if (step.center || !target) {
-      tourSpotlight.classList.add("center");
-      tourSpotlight.style.width = "1px";
-      tourSpotlight.style.height = "1px";
-      tourSpotlight.style.left = "50%";
-      tourSpotlight.style.top = "50%";
-      tourPopover.classList.add("center");
-      tourPopover.dataset.placement = "center";
-      tourPopover.style.left = "";
-      tourPopover.style.top = "";
-      tourPopover.style.removeProperty("--arrow-left");
+      centerTour();
       return;
     }
-    tourSpotlight.classList.remove("center");
-    tourPopover.classList.remove("center");
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
     const rect = target.getBoundingClientRect();
+    const pad = 6;
+    const left = Math.max(0, Math.min(Math.round(rect.left) - pad, vw));
+    const top = Math.max(0, Math.min(Math.round(rect.top) - pad, vh));
+    const right = Math.max(0, Math.min(Math.round(rect.right) + pad, vw));
+    const bottom = Math.max(0, Math.min(Math.round(rect.bottom) + pad, vh));
+    const cutWidth = Math.max(2, right - left);
+    const cutHeight = Math.max(2, bottom - top);
+
+    tourShade.top.style.cssText = `left:0;top:0;width:${vw}px;height:${top}px`;
+    tourShade.bottom.style.cssText = `left:0;top:${bottom}px;width:${vw}px;height:${Math.max(0, vh - bottom)}px`;
+    tourShade.left.style.cssText = `left:0;top:${top}px;width:${left}px;height:${cutHeight}px`;
+    tourShade.right.style.cssText = `left:${right}px;top:${top}px;width:${Math.max(0, vw - right)}px;height:${cutHeight}px`;
+    tourRing.hidden = false;
+    tourRing.style.left = `${left}px`;
+    tourRing.style.top = `${top}px`;
+    tourRing.style.width = `${cutWidth}px`;
+    tourRing.style.height = `${cutHeight}px`;
+
+    tourPopover.classList.remove("center");
     const width = tourPopover.offsetWidth;
     const height = tourPopover.offsetHeight;
     const margin = 14;
     let placement = step.placement || "bottom";
-    if (placement === "bottom" && rect.bottom + height + margin > window.innerHeight - 12) placement = "top";
-    if (placement === "top" && rect.top - height - margin < 12) placement = "bottom";
-    const left = Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - 12));
-    let top;
-    if (placement === "top") top = Math.max(12, rect.top - height - margin);
-    else top = Math.min(rect.bottom + margin, window.innerHeight - height - 12);
-    tourSpotlight.style.left = `${Math.max(6, rect.left - 6)}px`;
-    tourSpotlight.style.top = `${Math.max(6, rect.top - 6)}px`;
-    tourSpotlight.style.width = `${Math.min(window.innerWidth - 12, rect.width + 12)}px`;
-    tourSpotlight.style.height = `${Math.min(window.innerHeight - 12, rect.height + 12)}px`;
-    if (window.innerWidth <= 820) {
+    if (placement === "bottom" && rect.bottom + height + margin > vh - 12) placement = "top";
+    if (placement === "top" && rect.top - height - margin < 12) {
+      placement = rect.bottom + height + margin <= vh - 12 ? "bottom" : "top";
+    }
+    const popLeft = Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, vw - width - 12));
+    let popTop;
+    if (placement === "top") popTop = Math.max(12, rect.top - height - margin);
+    else popTop = Math.min(rect.bottom + margin, vh - height - 12);
+
+    if (vw <= 820) {
       tourPopover.dataset.placement = "center";
       tourPopover.style.left = "";
       tourPopover.style.top = "";
@@ -1863,46 +2062,61 @@
       return;
     }
     tourPopover.dataset.placement = placement;
-    tourPopover.style.left = `${left}px`;
-    tourPopover.style.top = `${top}px`;
-    const arrow = Math.max(16, Math.min(rect.left + rect.width / 2 - left - 7, width - 30));
+    tourPopover.style.left = `${popLeft}px`;
+    tourPopover.style.top = `${Math.max(12, popTop)}px`;
+    const arrow = Math.max(16, Math.min(rect.left + rect.width / 2 - popLeft - 7, width - 30));
     tourPopover.style.setProperty("--arrow-left", `${arrow}px`);
   }
 
   async function showTourStep(index) {
     if (tourBusy) return;
     tourBusy = true;
-    tourIndex = Math.max(0, Math.min(TOUR_STEPS.length - 1, index));
-    const step = TOUR_STEPS[tourIndex];
-    if (step.view && state.view !== step.view) switchView(step.view, false);
-    await tourWait(step.target ? 160 : 30);
-    const target = step.target ? $(step.target) : null;
-    if (target) {
-      target.scrollIntoView({ block: "center", inline: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-      await tourWait(260);
+    try {
+      tourIndex = Math.max(0, Math.min(TOUR_STEPS.length - 1, index));
+      const step = TOUR_STEPS[tourIndex];
+      if (step.view !== "flow") stopFlow();
+      if (step.view && state.view !== step.view) switchView(step.view, false);
+      await tourWait(step.target ? 100 : 30);
+      const target = step.target ? await waitForTourTarget(step.target) : null;
+      if (target) {
+        target.scrollIntoView({ block: "center", inline: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+        await tourWait(280);
+        await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      }
+      $("#tour-step-count").textContent = `${tourIndex + 1} / ${TOUR_STEPS.length}`;
+      $("#tour-title").textContent = step.title;
+      $("#tour-body").textContent = step.body;
+      $("#tour-back").style.visibility = tourIndex === 0 ? "hidden" : "visible";
+      $("#tour-next").textContent = tourIndex === TOUR_STEPS.length - 1 ? "Finish" : "Next";
+      setTourDots();
+      positionTour(step);
+      if (step.view === "flow") playFlow();
+      tourPopover.focus({ preventScroll: true });
+    } finally {
+      tourBusy = false;
     }
-    $("#tour-step-count").textContent = `${tourIndex + 1} / ${TOUR_STEPS.length}`;
-    $("#tour-title").textContent = step.title;
-    $("#tour-body").textContent = step.body;
-    $("#tour-back").style.visibility = tourIndex === 0 ? "hidden" : "visible";
-    $("#tour-next").textContent = tourIndex === TOUR_STEPS.length - 1 ? "Finish" : "Next";
-    positionTour(step);
-    tourBusy = false;
-    tourPopover.focus({ preventScroll: true });
   }
 
   function startTour() {
-    tourActive = true;
-    tourLayer.classList.add("open");
+    if (!tourActive) {
+      tourReturnFocus = document.activeElement;
+      tourActive = true;
+      document.body.classList.add("tour-open");
+      tourLayer.classList.add("open");
+    }
     showTourStep(0);
   }
 
   function endTour(markSeen = true) {
     tourActive = false;
+    stopFlow();
     tourLayer.classList.remove("open");
+    document.body.classList.remove("tour-open");
     if (markSeen) {
       try { localStorage.setItem("onchain-tour-seen", "1"); } catch { /* local demo */ }
     }
+    if (tourReturnFocus && tourReturnFocus.isConnected && tourReturnFocus !== document.body) tourReturnFocus.focus();
+    else $("#tour-start")?.focus();
   }
 
   $("#tour-start").addEventListener("click", startTour);
@@ -1914,11 +2128,29 @@
   $("#tour-skip").addEventListener("click", () => endTour());
   document.addEventListener("keydown", (event) => {
     if (!tourActive) return;
-    if (event.key === "Escape") endTour();
-    if (event.key === "ArrowRight") showTourStep(tourIndex + 1);
-    if (event.key === "ArrowLeft") showTourStep(tourIndex - 1);
+    if (event.key === "Escape") { endTour(); return; }
+    if (event.key === "ArrowRight") { event.preventDefault(); showTourStep(tourIndex + 1); return; }
+    if (event.key === "ArrowLeft") { event.preventDefault(); showTourStep(tourIndex - 1); return; }
+    if (event.key === "Tab") {
+      const focusable = $$("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])", tourPopover)
+        .filter((el) => !el.disabled && el.offsetParent !== null);
+      if (!focusable.length) { event.preventDefault(); return; }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const inside = tourPopover.contains(document.activeElement);
+      if (event.shiftKey && (!inside || document.activeElement === first)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (!inside || document.activeElement === last)) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
   });
   window.addEventListener("resize", () => {
+    if (tourActive) positionTour(TOUR_STEPS[tourIndex]);
+  });
+  window.visualViewport?.addEventListener("resize", () => {
     if (tourActive) positionTour(TOUR_STEPS[tourIndex]);
   });
 
