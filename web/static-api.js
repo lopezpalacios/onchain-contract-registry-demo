@@ -61,7 +61,7 @@
       h1 = Math.imul(h1, 0x01000193) >>> 0;
       h2 = Math.imul(h2 ^ text.charCodeAt(i), 0x85ebca6b) >>> 0;
     }
-    return "0x" + [h1, h2, h1 ^ h2, (h1 + h2) >>> 0].map((n) => n.toString(16).padStart(16, "0")).join("");
+    return "0x" + [h1, h2, (h1 ^ h2) >>> 0, (h1 + h2) >>> 0].map((n) => n.toString(16).padStart(16, "0")).join("");
   }
 
   function orgAncestors(orgUnitId) {
