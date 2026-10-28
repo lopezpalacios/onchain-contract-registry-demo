@@ -631,8 +631,19 @@ def council(conn) -> dict:
 def reference(conn) -> dict:
     return {
         "chains": rows(conn, "SELECT id, name, network_type, environment, chain_id FROM chain ORDER BY environment, name"),
-        "org_units": rows(conn, "SELECT id, name, division, legal_entity FROM org_unit ORDER BY name"),
+        "org_units": rows(conn, "SELECT id, name, parent_id, division, legal_entity FROM org_unit ORDER BY name"),
         "people": rows(conn, "SELECT id, display_name, title, email FROM person WHERE active=1 ORDER BY display_name"),
+        "role_assignments": rows(
+            conn,
+            """
+            SELECT ra.person_id, ra.role_code, ra.scope_org_unit_id, ra.active,
+                   ra.valid_from, ra.valid_to, p.display_name, p.title
+            FROM role_assignment ra
+            JOIN person p ON p.id = ra.person_id
+            WHERE ra.active = 1 AND p.active = 1
+            ORDER BY ra.role_code, p.display_name
+            """,
+        ),
         "templates": rows(conn, "SELECT id, name, version, status, category, contract_type, default_risk_tier FROM template WHERE status='approved' ORDER BY name, version"),
         "policies": rows(conn, "SELECT object_type, risk_tier, gate, required_role, sequence, blocking FROM approval_policy ORDER BY object_type, risk_tier, sequence"),
         "evidence_labels": {
@@ -732,6 +743,10 @@ def registrations(conn) -> dict:
             "SELECT * FROM v_gate_status WHERE object_type='deployment' AND object_id=? ORDER BY sequence",
             (item["id"],),
         )
+        item["next_gate"] = next(
+            (g for g in item["gates"] if g["decision"] == "pending" and g["is_next"]),
+            None,
+        )
         item["manifest_document"] = one(
             conn,
             "SELECT * FROM document WHERE object_type='deployment_request' AND object_id=? AND doc_type='deployment_manifest' ORDER BY created_at DESC LIMIT 1",
@@ -758,6 +773,8 @@ PURPOSE_META = {
     "compliance": ("compliance", "RuleEngine"),
     "utility": ("utility", "Utility"),
 }
+
+RISK_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 
 EVIDENCE_LABELS = {
     "source_tests": "Source + tests",
@@ -839,6 +856,11 @@ def onboarding(conn, payload: dict) -> tuple[int, dict]:
         risk_tier = _recommend_risk(purpose, user_impact, environment)
     if risk_tier not in {"low", "medium", "high", "critical"}:
         return 400, {"error": "risk tier is invalid"}
+    policy_minimum = _recommend_risk(purpose, user_impact, environment)
+    if RISK_RANK[risk_tier] < RISK_RANK[policy_minimum]:
+        return 400, {
+            "error": f"risk tier {risk_tier} is below policy minimum {policy_minimum}; select {policy_minimum} or higher"
+        }
 
     template_id = payload.get("template_id")
     template = None

@@ -1,8 +1,11 @@
 # Smart Contract Inventory & Control Registry
 
-A working SQLite prototype of a bank-grade registry for **smart contract templates, on-chain deployments, business sign-offs, evidence and reconciliation**.
+A static **HTML/CSS/JS** platform for **smart contract templates, on-chain deployments, business sign-offs, evidence and reconciliation**. SQLite is the build-time source of truth. The browser uses a generated data snapshot and localStorage for demo changes.
 
+**Public repository:** https://github.com/lopezpalacios/onchain-contract-registry-demo  
 **Public gist:** https://gist.github.com/lopezpalacios/90e21f50bfbe94962eb4284c3f5cae88
+
+> **Gist readers:** open `REBUILD.md`, `PLATFORM-GUIDE.md`, and `registry.sql` from the file tabs. `STACK.md` contains the full source. The gist can rebuild the platform without the repository.
 
 The demo is built around a fictional financial institution and a tokenized-gold estate: CMTAT 3.0.0 on a permissioned Besu ledger and on Ethereum mainnet, CMTA RuleEngine rules, ERC-3643 identity registries, a DvP settlement contract, a CHF deposit token, an escrow, a collateral-vault template, Safes, timelocks, oracles and proof-of-reserve. A **pstack-style Council** view records what Compliance, Legal, Operational Risk, Security, DPO, Finance and the business owner still do not accept.
 
@@ -15,17 +18,29 @@ The demo is built around a fictional financial institution and a tokenized-gold 
 ```bash
 git clone https://github.com/lopezpalacios/onchain-contract-registry-demo.git
 cd onchain-contract-registry-demo
-python3 scripts/build_db.py          # creates data/registry.db from schema + seed + views
-python3 app.py                       # http://127.0.0.1:8765
+open web/index.html
 ```
 
-No third-party Python packages are required. Python 3.11+ and SQLite 3.35+ are enough.
+Or serve the static folder:
 
 ```bash
+python3 -m http.server 8765 --directory web
+# http://127.0.0.1:8765
+```
+
+The runtime has no server calls. Open `web/index.html` directly or use any static host.
+
+To rebuild the SQLite source and the static snapshot:
+
+```bash
+sqlite3 data/registry.db < registry.sql   # SQLite source (or python3 scripts/build_db.py)
+python3 scripts/export_static.py          # web/data.js
 python3 -m unittest discover -s tests -v
 ```
 
-The current build has **26 templates**, **25 contract records** (16 logical product deployments, 1 implementation, 8 supporting contracts), **166 sign-off rows**, **20 persona findings**, **7 compliance profiles**, **5 ICT third parties**, **15 attestations**, **5 discovery items** and **3 chains**.
+Python is only used for the build, tests and the optional Besu adapter. The platform works without Python.
+
+The current build has **26 templates**, **25 contract records** (16 logical product deployments, 1 implementation, 8 supporting contracts), **166 sign-off rows**, **20 persona findings**, **7 compliance profiles**, **5 ICT third parties**, **15 attestations**, **5 discovery items** and **3 chains**. The static snapshot is `web/data.js`; demo changes are stored in localStorage.
 
 ---
 
@@ -66,7 +81,10 @@ onchain-contract-registry-demo/
 ├── PROMPT.md                   # build prompt for a coding agent
 ├── PSTACK.md                   # banking persona review protocol
 ├── NOTICE.md                   # demo/publication disclaimer
-├── app.py                      # stdlib HTTP API + static server
+├── REBUILD.md                  # SQLite → static platform rebuild guide
+├── registry.sql                # combined schema, views, and seed
+├── index.html                  # redirect to web/index.html
+├── app.py                      # optional build/test API (not needed by the browser)
 ├── registry/
 │   ├── schema.sql              # STRICT SQLite schema, constraints, SoD triggers
 │   ├── views.sql               # inventory, readiness, approvals, reserves, controls
@@ -74,18 +92,22 @@ onchain-contract-registry-demo/
 │   └── keccak.py               # dependency-free Keccak-256 / EIP-55 / selectors
 ├── scripts/
 │   ├── build_db.py             # rebuild data/registry.db
+│   ├── export_static.py        # SQLite → web/data.js
 │   ├── besu_sync.py            # real JSON-RPC discovery adapter + mock mode
 │   ├── business_case.py        # illustrative NPV/payback/ROI model
 │   └── export_stack.py         # text-only source bundle for a gist
 ├── web/
-│   ├── index.html
+│   ├── index.html              # static shell
 │   ├── style.css               # Swiss-style design system
-│   └── app.js                  # vanilla JS views, modals, approval action
+│   ├── app.js                  # views, modals, approvals, tutorial
+│   ├── static-api.js           # browser-only API + localStorage
+│   └── data.js                 # generated SQLite snapshot
 ├── tests/test_registry.py      # schema, linkage, SoD, readiness, reserve, API, sync tests
 ├── docs/
 │   ├── registry-blueprint.md   # research, architecture, taxonomy, gaps, roadmap
 │   ├── persona-review.md       # council findings, disposition and open gates
 │   ├── firefly-kaleido-integration.md  # pre-chain → FireFly/Kaleido → chain logic
+│   ├── platform-guide.md       # why / what / how in ASD-STE100
 │   ├── business-case.md        # value model, scenarios, KPIs, regulatory mapping
 │   └── example-queries.sql     # 18 ready-to-run registry queries
 └── data/registry.db            # built demo database
@@ -169,7 +191,9 @@ Production hardening: put Besu RPC behind mTLS/OIDC, never expose port 8545, use
 
 ---
 
-## API
+## Browser-only data API
+
+The static app calls `web/static-api.js`. The paths match the optional build API. No HTTP request is made for these paths in the browser.
 
 | Endpoint | Purpose |
 |---|---|
@@ -188,7 +212,7 @@ Production hardening: put Besu RPC behind mTLS/OIDC, never expose port 8545, use
 | `POST /api/signoffs/<id>/decision` | `{decision, actor_id, comments}`; validates role, scope, SoD, gate order and readiness |
 | `POST /api/sync` | Demo mock Besu sync |
 
-The demo server has no authentication, TLS or CSRF protection. Bind it to `127.0.0.1` only.
+The static demo has no authentication. Demo state is in localStorage. Do not use real data. If you run the optional `app.py` build server, bind it to `127.0.0.1` only.
 
 ---
 
@@ -196,9 +220,11 @@ The demo server has no authentication, TLS or CSRF protection. Bind it to `127.0
 
 - **[docs/registry-blueprint.md](docs/registry-blueprint.md)** — research on open-source registries, reference architecture, contract taxonomy, template/deployment linkage, Besu integration, sign-off design, gaps and roadmap.
 - **[docs/firefly-kaleido-integration.md](docs/firefly-kaleido-integration.md)** — end-to-end pre-chain → FireFly/Kaleido → chain integration logic, field mapping, retries and controls.
+- **[docs/platform-guide.md](docs/platform-guide.md)** — why, what and how. Written in ASD-STE100 Simplified Technical English.
+- **[REBUILD.md](REBUILD.md)** — rebuild the SQLite source and the static HTML/JS/CSS platform.
 - **[docs/business-case.md](docs/business-case.md)** — value drivers, illustrative business case, KPIs, funding, regulatory mapping and risks.
 - **[docs/example-queries.sql](docs/example-queries.sql)** — 18 ready-to-run queries for inventory, reuse, proxies, pending gates, reserves, alerts, exceptions, DORA export and events.
-- **[PROMPT.md](PROMPT.md)** — a complete build prompt for reproducing the stack with a coding agent.
+- **[PROMPT.md](PROMPT.md)** — a complete build prompt for reproducing the stack with a coding agent. The prompt now targets a static runtime.
 - **[PSTACK.md](PSTACK.md)** — the eight-role banking review protocol and what the council changed.
 - **[docs/persona-review.md](docs/persona-review.md)** — synthesized findings, dispositions and remaining gate items.
 - **[NOTICE.md](NOTICE.md)** — fictional-demo, no-affiliation and production-readiness notice.
@@ -208,7 +234,8 @@ The demo server has no authentication, TLS or CSRF protection. Bind it to `127.0
 ## Status
 
 - 30 automated tests pass.
-- API and UI are smoke-tested with Playwright; no console errors.
+- The static UI is smoke-tested with Playwright in `file://` mode; no console errors.
+- The platform tutorial starts on first visit. Select **Platform tour** to repeat it.
 - The Besu adapter is tested in mock mode. A real node is not available in this environment; the JSON-RPC path is implemented but should be validated against the bank's Besu version and privacy configuration before use.
 - The Council view deliberately shows **141 approved gates with placeholder or missing evidence**, no IdP/MFA, and open legal/AML/DPIA/DORA findings. Do not present the demo as production-ready.
 - Source verification is modelled through Sourcify/Blockscout links; no external verification call is made by the demo.

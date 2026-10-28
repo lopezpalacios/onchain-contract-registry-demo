@@ -1,5 +1,41 @@
 # Build Prompt — Financial Institution Smart Contract Inventory & Control Registry
 
+## 0. Static-only override — read first
+
+The product runtime must use **HTML, CSS, and JavaScript only**.
+
+- Do not build a server runtime.
+- Do not call an API from the browser.
+- SQLite is a build-time source only.
+- Generate `web/data.js` from SQLite with `scripts/export_static.py`.
+- Implement `web/static-api.js` in the browser. Store demo changes in localStorage.
+- Open `web/index.html` directly, or serve the `web` directory with any static server.
+- The Python files are optional build, test, and Besu adapter tools. They are not part of the product runtime.
+- Use `REBUILD.md` for the exact rebuild steps.
+
+If a section below conflicts with this override, this override wins.
+
+### Required tutorial
+
+Add a **Platform tour** button and a guided overlay with arrows.
+
+The tour must start on the first visit. It must have these steps:
+
+1. Why the platform exists.
+2. Read the Overview signals.
+3. Start at Onboarding.
+4. Answer the four onboarding steps.
+5. Review risk and evidence gaps.
+6. Show that the new record is pre-chain.
+7. Approve the gates in order.
+8. Link the on-chain record.
+9. Review Council and Controls.
+10. Start now.
+
+Use short sentences. Use active voice. Use one term for one idea. Write all product text in **ASD-STE100 Simplified Technical English**. Do not use marketing language. Do not name a specific bank.
+
+The written guide is `docs/platform-guide.md`.
+
 Use this prompt with a capable coding agent. It is written to produce a runnable, dependency-light prototype, not a slide deck.
 
 ---
@@ -325,6 +361,8 @@ Write `docs/registry-blueprint.md` covering:
 - Roadmap and success metrics.
 - Sources.
 
+Write `docs/platform-guide.md` with the why, what, and how. Use ASD-STE100. Add the ten tour steps and a two-minute presentation script.
+
 Write `docs/persona-review.md` and `PSTACK.md`:
 
 - Eight roles: Business, Compliance/AML, Legal/Regulatory, Operational Risk/Internal Audit, CISO/Security, DPO, Finance/Reserve, Regulator.
@@ -361,6 +399,9 @@ Add `docs/example-queries.sql` with 18 useful queries.
 - A wrong role is rejected.
 - A final approval cannot bypass a blocked template/audit.
 - `python3 -m unittest discover -s tests -v` passes 30 tests.
+- Open `web/index.html` directly in a browser. The Overview, Registration, Onboarding, Approvals, Council, Reconciliation, and Controls views must work with no server.
+- Create a pre-chain record in the wizard. Confirm that it has no address. Confirm that the record persists in localStorage.
+- Start the Platform tour. Confirm that all ten steps show the correct target and arrow.
 - The onboarding wizard creates a pre-chain request with no address; FireFly/Kaleido authority is recorded. A linked request shows address, tx, block and hash match.
 - `python3 scripts/besu_sync.py --mock --chain ch-besu-prod` writes a discovery and sync run.
 - `python3 scripts/business_case.py` prints three scenarios.

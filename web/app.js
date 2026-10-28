@@ -112,7 +112,7 @@
 
   function table(headers, rows, options = {}) {
     if (!rows.length) return `<div class="empty">${esc(options.empty || "No records.")}</div>`;
-    return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr class="${options.clickable ? "clickable" : ""}" ${row.id ? `data-contract="${esc(row.id)}"` : row.registration ? `data-registration="${esc(row.registration)}"` : ""}>${row.cells.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+    return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr class="${options.clickable ? "clickable" : ""}" ${options.clickable ? 'tabindex="0"' : ""} ${row.id ? `data-contract="${esc(row.id)}"` : row.registration ? `data-registration="${esc(row.registration)}"` : ""}>${row.cells.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
   }
 
   function detailGrid(items, extraClass = "") {
@@ -123,10 +123,15 @@
     return `<div class="detail-section"><h4>${esc(text)}</h4>`;
   }
 
+  let modalLastFocus = null;
+
   function openModal(html) {
+    modalLastFocus = document.activeElement;
     $("#modal-content").innerHTML = html;
     $("#modal-backdrop").classList.add("open");
     document.body.style.overflow = "hidden";
+    $(".topbar")?.setAttribute("inert", "");
+    $(".shell")?.setAttribute("inert", "");
     const close = $(".modal-close");
     if (close) close.focus();
   }
@@ -134,6 +139,9 @@
   function closeModal() {
     $("#modal-backdrop").classList.remove("open");
     document.body.style.overflow = "";
+    $(".topbar")?.removeAttribute("inert");
+    $(".shell")?.removeAttribute("inert");
+    if (modalLastFocus && modalLastFocus.isConnected) modalLastFocus.focus();
   }
 
   function wireModal() {
@@ -162,6 +170,7 @@
   }
 
   async function api(path, options = {}) {
+    if (window.staticRegistryApi) return window.staticRegistryApi(path, options);
     const response = await fetch(path, {
       headers: { "Content-Type": "application/json" },
       ...options,
@@ -189,7 +198,9 @@
       link.setAttribute("aria-selected", String(active));
     });
     if (updateHash) history.replaceState(null, "", `#${view}`);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const activeLink = $(".nav-link.active");
+    if (activeLink) activeLink.scrollIntoView({ inline: "center", block: "nearest", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   }
 
   // -----------------------------------------------------------------------
@@ -307,44 +318,51 @@
 
   function renderAlerts() {
     const alerts = [];
-    (state.summary.alerts || []).slice(0, 3).forEach((alert) => {
+    (state.summary.alerts || []).forEach((alert) => {
       alerts.push({
         cls: alert.alert_level === "expired" ? "" : alert.alert_level === "critical" ? "" : "amber",
+        severity: alert.alert_level === "expired" || alert.alert_level === "critical" ? 0 : 3,
         title: `${alert.attestation_type.replaceAll("_", " ")} · ${alert.subject}`,
         sub: `Expires ${fmtDate(alert.expires_at)} · ${alert.days_left} days`,
         badge: badge(alert.alert_level === "expired" ? "expired" : "expiring", alert.alert_level === "expired" ? "critical" : "high"),
         view: "controls",
       });
     });
-    (state.discovery.queue || []).filter((item) => ["new", "triage", "quarantined"].includes(item.status)).slice(0, 3).forEach((item) => {
+    (state.discovery.queue || []).filter((item) => ["new", "triage", "quarantined"].includes(item.status)).forEach((item) => {
       alerts.push({
         cls: item.status === "quarantined" ? "" : "amber",
+        severity: item.status === "quarantined" ? 0 : item.status === "triage" ? 1 : 2,
         title: `Unregistered contract · ${shortAddr(item.address)}`,
         sub: `${item.chain_name} · ${item.classification || item.status}`,
         badge: statusBadge(item.status),
         view: "reconciliation",
       });
     });
-    (state.controls.exceptions || []).slice(0, 2).forEach((item) => {
+    (state.controls.exceptions || []).forEach((item) => {
       alerts.push({
         cls: "amber",
+        severity: 1,
         title: `${item.control_code} · ${item.product_name}`,
         sub: `${item.control_name} · ${item.status}`,
         badge: badge(item.status, "high"),
         view: "controls",
       });
     });
-    (state.council.findings || []).filter((f) => f.status === "open" && ["critical", "high"].includes(f.severity)).slice(0, 2).forEach((f) => {
+    (state.council.findings || []).filter((f) => f.status === "open" && ["critical", "high"].includes(f.severity)).forEach((f) => {
       alerts.push({
         cls: f.severity === "critical" ? "" : "amber",
+        severity: f.severity === "critical" ? 0 : 1,
         title: `${f.persona_name} · ${f.title}`,
         sub: `${f.owner_name || "unassigned"} · due ${fmtDate(f.due_date)}`,
         badge: riskBadge(f.severity),
         view: "council",
       });
     });
-    $("#alert-preview").innerHTML = alerts.length
-      ? alerts.slice(0, 6).map((item) => `
+    alerts.sort((a, b) => a.severity - b.severity || a.title.localeCompare(b.title));
+    $("#alert-count").textContent = `${alerts.length} signals`;
+    const visible = alerts.slice(0, 6);
+    $("#alert-preview").innerHTML = visible.length
+      ? visible.map((item) => `
         <div class="alert-item" style="cursor:pointer" data-nav="${esc(item.view)}">
           <span class="alert-mark ${item.cls}"></span>
           <div class="alert-main">
@@ -352,7 +370,7 @@
             <div class="alert-sub">${esc(item.sub)}</div>
           </div>
           ${item.badge}
-        </div>`).join("")
+        </div>`).join("") + (alerts.length > 6 ? `<div class="alert-item" style="cursor:pointer" data-nav="council"><span class="alert-mark amber"></span><div class="alert-main"><div class="alert-title">+${alerts.length - 6} more signals</div><div class="alert-sub">Open Council for findings or Reconciliation for unknown contracts.</div></div><span class="badge badge-neutral">view</span></div>` : "")
       : `<div class="empty">Nothing needs attention.</div>`;
   }
 
@@ -457,6 +475,7 @@
         <h4>Approval progress</h4>
         <div class="flex between center gap-12"><span class="small">${selected.approved_gates || 0} of ${selected.total_gates || 0} gates approved</span>${selected.pending_gates ? badge(`${selected.pending_gates} pending`, "high") : badge("complete", "low")}</div>
         ${progress(selected.approved_gates || 0, selected.total_gates || 0)}
+        ${selected.next_gate ? `<div class="flex between center gap-12" style="margin-top:10px"><span class="tiny muted">Next: ${esc(selected.next_gate.required_role)}</span><button class="btn btn-primary btn-sm" data-gate="${esc(selected.next_gate.id)}">Review ${esc(selected.next_gate.gate)}</button></div>` : ""}
       </div>
       ${linked ? `
         <div class="detail-section"><h4>On-chain link</h4>
@@ -525,6 +544,8 @@
     third_party: "Third-party / OSS template",
   };
 
+  const RISK_RANK = { low: 0, medium: 1, high: 2, critical: 3 };
+
   const AUTHORITY_LABELS = {
     firefly_kaleido: "FireFly under Kaleido",
     safe_timelock: "Safe / Timelock",
@@ -559,7 +580,8 @@
     const impact = $("#ob-impact").value;
     const environment = chain.environment || "UAT";
     const selectedRisk = $("#ob-risk").value;
-    const risk = selectedRisk === "auto" ? recommendedRisk(purpose, impact, environment) : selectedRisk;
+    const policyRisk = recommendedRisk(purpose, impact, environment);
+    const risk = selectedRisk === "auto" ? policyRisk : selectedRisk;
     const evidence = $$(".ob-evidence:checked").map((el) => el.value);
     return {
       contract_name: ($("#ob-name").value || "").trim(),
@@ -579,6 +601,8 @@
       target_window: ($("#ob-window").value || "").trim(),
       notes: ($("#ob-notes").value || "").trim(),
       computed_risk: risk,
+      policy_risk: policyRisk,
+      risk_below_floor: RISK_RANK[risk] < RISK_RANK[policyRisk],
     };
   }
 
@@ -616,6 +640,7 @@
     const required = requiredEvidence(values.purpose, values.code_source, values.user_impact, risk);
     const missing = [...required].filter((e) => !values.evidence.includes(e));
     return `
+      ${values.risk_below_floor ? `<div class="alert-item" style="margin-bottom:12px"><span class="alert-mark"></span><div class="alert-main"><div class="alert-title">Risk below policy minimum</div><div class="alert-sub">Selected ${esc(values.computed_risk)}, policy minimum ${esc(values.policy_risk)}. This request cannot be created without a documented risk acceptance.</div></div></div>` : ""}
       <div class="review-grid">
         <div><span>Contract</span><strong>${esc(values.contract_name || "—")}</strong></div>
         <div><span>Purpose</span><strong>${esc(PURPOSE_LABELS[values.purpose] || values.purpose)}</strong></div>
@@ -627,7 +652,7 @@
         <div><span>Gates</span><strong>${gates.length} pending gates</strong></div>
       </div>
       <div class="detail-section"><h4>Required gates</h4><div>${gates.map((g) => `<span class="chip">${esc(g.gate)}</span>`).join("") || `<span class="muted small">No deployment gate policy for this tier.</span>`}</div></div>
-      <div class="detail-section"><h4>Evidence gaps</h4><div>${missing.length ? missing.map((e) => `<span class="chip red">${esc(state.reference.evidence_labels[e] || e)}</span>`).join("") : `<span class="chip green">All required evidence provided</span>`}</div></div>
+      <div class="detail-section"><h4>Evidence gaps</h4><div>${missing.length ? missing.map((e) => `<span class="chip red">${esc(state.reference.evidence_labels[e] || e)}</span>`).join("") : `<span class="chip green">All required evidence declared</span>`}</div><div class="form-note">Evidence is <strong>declared</strong>, not verified. Documents and hashes must be linked before approval.</div></div>
       <div class="form-note">This creates a <strong>pre-chain</strong> deployment request. FireFly/Kaleido will submit the signed deployment later. No on-chain address is created by this step.</div>`;
   }
 
@@ -641,12 +666,20 @@
     const path = v.code_source === "approved_params" ? "Reuse approved template → deployment request" : "Draft template → template assurance → deployment request";
     $("#onboarding-preview").innerHTML = `
       <div class="preview-block"><div class="preview-label">Registration path</div><div class="preview-value">${esc(path)}</div></div>
-      <div class="preview-block"><div class="preview-label">Risk recommendation</div><div class="preview-value">${riskBadge(risk)} ${v.risk_tier === "auto" ? `<span class="tiny muted">auto from purpose, users and environment</span>` : ""}</div></div>
+      <div class="preview-block"><div class="preview-label">Risk tier</div><div class="preview-value">${riskBadge(risk)} ${v.risk_tier === "auto" ? `<span class="tiny muted">auto from purpose, users and environment</span>` : ""}</div>${v.risk_below_floor ? `<div class="field-error" style="display:block;margin-top:6px">Policy minimum is ${esc(v.policy_risk)}. Select ${esc(v.policy_risk)} or higher, or attach a documented risk acceptance.</div>` : `<div class="tiny muted" style="margin-top:4px">Policy minimum: ${esc(v.policy_risk)}</div>`}</div>
       <div class="preview-block"><div class="preview-label">Deployment authority</div><div class="preview-value">${esc(AUTHORITY_LABELS[v.deployment_authority] || v.deployment_authority)}</div><div class="tiny muted">Signing identity: ${v.chain_id === "ch-besu-uat" ? "si-besu-uat-service" : v.chain_id === "ch-besu-prod" ? "si-besu-service" : "si-eth-service"}</div></div>
       <div class="preview-block"><div class="preview-label">Required gates (${gates.length})</div><div>${gates.map((g) => `<span class="chip">${esc(g.gate)}</span>`).join("") || `<span class="muted small">No policy rows.</span>`}</div></div>
-      <div class="preview-block"><div class="preview-label">Evidence check</div><div class="preview-list"><div><span>Provided</span><span>${v.evidence.length}</span></div><div><span>Required</span><span>${required.size}</span></div></div><div class="mt-8">${missing.length ? missing.map((e) => `<span class="chip red">${esc(state.reference.evidence_labels[e] || e)}</span>`).join("") : `<span class="chip green">complete</span>`}</div></div>
+      <div class="preview-block"><div class="preview-label">Evidence check</div><div class="preview-list"><div><span>Declared</span><span>${v.evidence.length}</span></div><div><span>Required</span><span>${required.size}</span></div></div><div class="mt-8">${missing.length ? missing.map((e) => `<span class="chip red">${esc(state.reference.evidence_labels[e] || e)}</span>`).join("") : `<span class="chip green">complete</span>`}</div></div>
       <div class="form-note">Pre-chain only: no address, transaction or runtime hash exists until deployment. The same request ID will link to the FireFly/Kaleido deployment receipt.</div>`;
     $("#onboarding-review").innerHTML = onboardingReviewHtml(v);
+  }
+
+  function setNameError(message) {
+    const input = $("#ob-name");
+    const error = $("#ob-name-error");
+    input.setAttribute("aria-invalid", message ? "true" : "false");
+    error.textContent = message || "";
+    error.hidden = !message;
   }
 
   function showOnboardingStep(step) {
@@ -659,6 +692,11 @@
     $("#ob-next").style.display = state.onboardingStep === 4 ? "none" : "";
     $("#ob-create").style.display = state.onboardingStep === 4 ? "" : "none";
     updateOnboardingPreview();
+    const heading = $(".wizard-step.active .wizard-heading");
+    if (heading) {
+      heading.setAttribute("tabindex", "-1");
+      heading.focus({ preventScroll: true });
+    }
   }
 
   function renderOnboarding() {
@@ -1609,8 +1647,16 @@
   async function submitOnboarding() {
     const values = onboardingValues();
     if (!values.contract_name) {
-      toast("Contract / product name is required.", "error");
+      setNameError("Contract / product name is required.");
       showOnboardingStep(1);
+      $("#ob-name").focus();
+      return;
+    }
+    setNameError("");
+    if (values.risk_below_floor) {
+      toast(`Risk tier is below the policy minimum (${values.policy_risk}).`, "error", 7000);
+      showOnboardingStep(2);
+      $("#ob-risk").focus();
       return;
     }
     if (values.code_source === "approved_params" && !values.template_id) {
@@ -1640,6 +1686,7 @@
     }
   }
 
+  $("#ob-name").addEventListener("input", () => setNameError(""));
   $("#ob-source").addEventListener("change", () => {
     $("#ob-template-row").style.display = $("#ob-source").value === "approved_params" ? "" : "none";
     updateOnboardingPreview();
@@ -1650,9 +1697,11 @@
   });
   $("#ob-next").addEventListener("click", () => {
     if (state.onboardingStep === 1 && !onboardingValues().contract_name) {
-      toast("Give the contract a name first.", "error");
+      setNameError("Give the contract a name first.");
+      $("#ob-name").focus();
       return;
     }
+    if (state.onboardingStep === 1) setNameError("");
     if (state.onboardingStep === 1 && $("#ob-source").value === "approved_params" && !$("#ob-template").value) {
       toast("Choose an approved template.", "error");
       return;
@@ -1662,6 +1711,7 @@
   $("#ob-back").addEventListener("click", () => showOnboardingStep(state.onboardingStep - 1));
   $("#ob-create").addEventListener("click", submitOnboarding);
 
+  $("#registration-new").addEventListener("click", () => switchView("onboarding"));
   $("#inventory-search").addEventListener("input", renderInventory);
   $("#inventory-risk").addEventListener("change", renderInventory);
   $("#inventory-chain").addEventListener("change", renderInventory);
@@ -1677,11 +1727,212 @@
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeModal();
+    if ($("#modal-backdrop").classList.contains("open") && event.key === "Tab") {
+      const focusable = $$("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])", $("#modal")).filter((el) => !el.disabled && el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    if ((event.key === "Enter" || event.key === " ") && !event.target.closest("input, textarea, select, button, a")) {
+      const row = event.target.closest("tr[data-contract], tr[data-registration]");
+      if (row) {
+        event.preventDefault();
+        row.click();
+        return;
+      }
+      const card = event.target.closest(".template-card[data-template]");
+      if (card) {
+        event.preventDefault();
+        openTemplate(card.dataset.template);
+      }
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // Platform tour
+  // -----------------------------------------------------------------------
+
+  const TOUR_STEPS = [
+    {
+      view: "overview", center: true,
+      title: "Why this platform exists",
+      body: "Teams use different records. The bank cannot link an approval to an address. This platform keeps one controlled record.",
+    },
+    {
+      view: "overview", target: "#kpi-grid", placement: "bottom",
+      title: "Read the signals",
+      body: "The Overview shows six measures. It shows the approval queue and the attention list. Use it to find blocked work.",
+    },
+    {
+      view: "overview", target: '[data-view="onboarding"]', placement: "bottom",
+      title: "Start at Onboarding",
+      body: "Select Onboarding to register a contract. Do this before deployment. The record starts with the business intent.",
+    },
+    {
+      view: "onboarding", target: "#ob-purpose", placement: "bottom",
+      title: "Answer the four steps",
+      body: "Select the purpose, code source, chain, users, risk, and deployment authority. The platform calculates the required gates.",
+    },
+    {
+      view: "onboarding", target: "#onboarding-preview", placement: "bottom",
+      title: "Review risk and evidence",
+      body: "The preview shows the policy minimum, the gate count, and the missing evidence. Do not select a risk tier below the policy minimum.",
+    },
+    {
+      view: "registration", target: "#registration-receipt", placement: "bottom",
+      title: "The record is pre-chain",
+      body: "The new registration has no address and no transaction. It has a request ID, a template, a config hash, and a manifest hash.",
+    },
+    {
+      view: "approvals", target: "#approval-kpis", placement: "bottom",
+      title: "Approve in order",
+      body: "Approvers work in order. The requester cannot approve. One person cannot approve two blocking gates on the same object.",
+    },
+    {
+      view: "registration", target: "#registration-table", placement: "top",
+      title: "Link the on-chain record",
+      body: "After FireFly and Kaleido deploy, Registration shows the address, transaction, block, and runtime hash. A hash match confirms the link.",
+    },
+    {
+      view: "council", target: "#council-kpis", placement: "bottom",
+      title: "Review the gaps",
+      body: "Council shows the findings and the evidence gaps. Controls shows the control tests and the exceptions. Do not hide a gap.",
+    },
+    {
+      view: "overview", center: true,
+      title: "Start now",
+      body: "Select Onboarding to start a registration. Select Platform tour to repeat this guide.",
+    },
+  ];
+
+  let tourIndex = 0;
+  let tourActive = false;
+  let tourBusy = false;
+  const tourLayer = $("#tour-layer");
+  const tourPopover = $("#tour-popover");
+  const tourSpotlight = $("#tour-spotlight");
+
+  function tourWait(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  function positionTour(step) {
+    const target = step.target ? $(step.target) : null;
+    if (step.center || !target) {
+      tourSpotlight.classList.add("center");
+      tourSpotlight.style.width = "1px";
+      tourSpotlight.style.height = "1px";
+      tourSpotlight.style.left = "50%";
+      tourSpotlight.style.top = "50%";
+      tourPopover.classList.add("center");
+      tourPopover.dataset.placement = "center";
+      tourPopover.style.left = "";
+      tourPopover.style.top = "";
+      tourPopover.style.removeProperty("--arrow-left");
+      return;
+    }
+    tourSpotlight.classList.remove("center");
+    tourPopover.classList.remove("center");
+    const rect = target.getBoundingClientRect();
+    const width = tourPopover.offsetWidth;
+    const height = tourPopover.offsetHeight;
+    const margin = 14;
+    let placement = step.placement || "bottom";
+    if (placement === "bottom" && rect.bottom + height + margin > window.innerHeight - 12) placement = "top";
+    if (placement === "top" && rect.top - height - margin < 12) placement = "bottom";
+    const left = Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - 12));
+    let top;
+    if (placement === "top") top = Math.max(12, rect.top - height - margin);
+    else top = Math.min(rect.bottom + margin, window.innerHeight - height - 12);
+    tourSpotlight.style.left = `${Math.max(6, rect.left - 6)}px`;
+    tourSpotlight.style.top = `${Math.max(6, rect.top - 6)}px`;
+    tourSpotlight.style.width = `${Math.min(window.innerWidth - 12, rect.width + 12)}px`;
+    tourSpotlight.style.height = `${Math.min(window.innerHeight - 12, rect.height + 12)}px`;
+    if (window.innerWidth <= 820) {
+      tourPopover.dataset.placement = "center";
+      tourPopover.style.left = "";
+      tourPopover.style.top = "";
+      tourPopover.style.removeProperty("--arrow-left");
+      return;
+    }
+    tourPopover.dataset.placement = placement;
+    tourPopover.style.left = `${left}px`;
+    tourPopover.style.top = `${top}px`;
+    const arrow = Math.max(16, Math.min(rect.left + rect.width / 2 - left - 7, width - 30));
+    tourPopover.style.setProperty("--arrow-left", `${arrow}px`);
+  }
+
+  async function showTourStep(index) {
+    if (tourBusy) return;
+    tourBusy = true;
+    tourIndex = Math.max(0, Math.min(TOUR_STEPS.length - 1, index));
+    const step = TOUR_STEPS[tourIndex];
+    if (step.view && state.view !== step.view) switchView(step.view, false);
+    await tourWait(step.target ? 160 : 30);
+    const target = step.target ? $(step.target) : null;
+    if (target) {
+      target.scrollIntoView({ block: "center", inline: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      await tourWait(260);
+    }
+    $("#tour-step-count").textContent = `${tourIndex + 1} / ${TOUR_STEPS.length}`;
+    $("#tour-title").textContent = step.title;
+    $("#tour-body").textContent = step.body;
+    $("#tour-back").style.visibility = tourIndex === 0 ? "hidden" : "visible";
+    $("#tour-next").textContent = tourIndex === TOUR_STEPS.length - 1 ? "Finish" : "Next";
+    positionTour(step);
+    tourBusy = false;
+    tourPopover.focus({ preventScroll: true });
+  }
+
+  function startTour() {
+    tourActive = true;
+    tourLayer.classList.add("open");
+    showTourStep(0);
+  }
+
+  function endTour(markSeen = true) {
+    tourActive = false;
+    tourLayer.classList.remove("open");
+    if (markSeen) {
+      try { localStorage.setItem("onchain-tour-seen", "1"); } catch { /* local demo */ }
+    }
+  }
+
+  $("#tour-start").addEventListener("click", startTour);
+  $("#tour-next").addEventListener("click", () => {
+    if (tourIndex >= TOUR_STEPS.length - 1) endTour();
+    else showTourStep(tourIndex + 1);
+  });
+  $("#tour-back").addEventListener("click", () => showTourStep(tourIndex - 1));
+  $("#tour-skip").addEventListener("click", () => endTour());
+  document.addEventListener("keydown", (event) => {
+    if (!tourActive) return;
+    if (event.key === "Escape") endTour();
+    if (event.key === "ArrowRight") showTourStep(tourIndex + 1);
+    if (event.key === "ArrowLeft") showTourStep(tourIndex - 1);
+  });
+  window.addEventListener("resize", () => {
+    if (tourActive) positionTour(TOUR_STEPS[tourIndex]);
   });
 
   const initialView = (location.hash || "#overview").slice(1);
   state.view = document.getElementById(`view-${initialView}`) ? initialView : "overview";
-  loadAll().catch((error) => {
+  loadAll().then(() => {
+    const params = new URLSearchParams(location.search);
+    const force = params.get("tour") === "1";
+    let seen = false;
+    try { seen = Boolean(localStorage.getItem("onchain-tour-seen")); } catch { /* file:// demo */ }
+    if (force || (!seen && params.get("tour") !== "0" && (!location.hash || location.hash === "#overview"))) {
+      window.setTimeout(startTour, 900);
+    }
+  }).catch((error) => {
     state.loading = false;
     toast(`Failed to load registry: ${error.message}`, "error", 9000);
     $("#kpi-grid").innerHTML = `<div class="kpi"><div class="kpi-label">Connection error</div><div class="kpi-value">—</div><div class="kpi-sub">${esc(error.message)}</div></div>`;

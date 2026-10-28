@@ -6,7 +6,7 @@
   <meta name="description" content="Smart Contract Inventory & Control Registry demo">
   <title>Smart Contract Registry — On-chain Control</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a1a1a'/%3E%3Crect x='9' y='9' width='14' height='14' fill='%23e60000' transform='rotate(45 16 16)'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <nav class="topbar" aria-label="Primary">
@@ -29,6 +29,7 @@
       <button class="nav-link" data-view="controls" role="tab" aria-selected="false">Controls</button>
     </div>
     <div class="topbar-right">
+      <button class="nav-tour" id="tour-start" type="button">Platform tour</button>
       <span class="env-tag"><span class="env-dot"></span> Besu prod · Ethereum</span>
       <div class="user-chip">
         <div class="avatar" aria-hidden="true"><span>PN</span></div>
@@ -91,7 +92,7 @@
         <div class="card">
           <div class="card-head">
             <div class="card-title">Attention required</div>
-            <button class="card-link" data-nav="reconciliation">Reconcile →</button>
+            <span class="small muted" id="alert-count">—</span>
           </div>
           <div class="card-body tight" id="alert-preview"></div>
         </div>
@@ -118,7 +119,10 @@
           <h2>Registration &amp; deployment linkage</h2>
           <p>Register the intent before deployment. The same pre-chain record later points to the deployed address, transaction, block and runtime code hash.</p>
         </div>
-        <span class="result-count" id="registration-count">—</span>
+        <div class="flex gap-12 center">
+          <span class="result-count" id="registration-count">—</span>
+          <button class="btn btn-primary" id="registration-new">New registration</button>
+        </div>
       </div>
       <div class="kpi-grid" id="registration-kpis"></div>
       <div class="grid grid-2">
@@ -170,7 +174,7 @@
               <div class="wizard-step active" data-step="1">
                 <div class="wizard-heading">What are you registering?</div>
                 <div class="form-grid">
-                  <div class="form-row"><label for="ob-name">Contract / product name</label><input id="ob-name" type="text" placeholder="e.g. Gold collateral rule" required></div>
+                  <div class="form-row"><label for="ob-name">Contract / product name</label><input id="ob-name" type="text" placeholder="e.g. Gold collateral rule" required aria-describedby="ob-name-error"><p class="field-error" id="ob-name-error" hidden></p></div>
                   <div class="form-row"><label for="ob-purpose">Purpose</label><select id="ob-purpose"><option value="tokenized_asset">Tokenized asset</option><option value="settlement">Settlement / value</option><option value="compliance">Compliance / rule engine</option><option value="utility">Utility / infrastructure</option></select></div>
                   <div class="form-row"><label for="ob-source">Code source</label><select id="ob-source"><option value="new">New template from scratch</option><option value="approved_params">Approved template, new parameters</option><option value="modified">Approved template, modified code</option><option value="third_party">Third-party / OSS template</option></select></div>
                   <div class="form-row" id="ob-template-row"><label for="ob-template">Approved template</label><select id="ob-template"></select></div>
@@ -408,8 +412,25 @@
       <div id="modal-content"></div>
     </div>
   </div>
+  <div id="tour-layer" role="dialog" aria-modal="true" aria-labelledby="tour-title">
+    <div id="tour-spotlight" aria-hidden="true"></div>
+    <div id="tour-popover" data-placement="bottom">
+      <div class="tour-eyebrow">Platform tour · <span id="tour-step-count">1 / 9</span></div>
+      <div class="tour-title" id="tour-title"></div>
+      <div class="tour-body" id="tour-body"></div>
+      <div class="tour-actions">
+        <button class="btn btn-ghost btn-sm" id="tour-skip" type="button">Skip</button>
+        <div class="flex gap-8">
+          <button class="btn btn-outline btn-sm" id="tour-back" type="button">Back</button>
+          <button class="btn btn-primary btn-sm" id="tour-next" type="button">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <div class="toast-wrap" id="toast-wrap" aria-live="polite"></div>
 
-  <script src="/static/app.js"></script>
+  <script src="./data.js"></script>
+  <script src="./static-api.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
